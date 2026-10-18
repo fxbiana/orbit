@@ -1,0 +1,73 @@
+:root {
+  color: #1c1917;
+  background: #faf7f2;
+  font: 14px/1.4 system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  width: 360px;
+  min-height: 280px;
+}
+
+.popup {
+  padding: 16px;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 16px;
+}
+
+h2 {
+  margin: 16px 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.url {
+  margin: 4px 0 10px;
+  color: #57534e;
+  word-break: break-all;
+}
+
+button {
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: #9a3412;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.error {
+  color: #9f1239;
+}
+
+ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+a {
+  color: #9a3412;
+}
