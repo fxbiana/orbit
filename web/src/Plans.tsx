@@ -9,6 +9,7 @@ import {
   type Match,
   type Plan,
 } from "./api"
+import { PANEL_KEYS, loadCached, readCache, refreshCached } from "./panelCache"
 
 const ACTIVITY_LABELS: Record<ActivityType, string> = {
   coffee: "Coffee",
@@ -51,9 +52,10 @@ function compatibilityLine(match: Match): string {
 }
 
 export function Plans({ getToken }: { getToken: () => Promise<string | null> }) {
-  const [plans, setPlans] = useState<Plan[]>([])
+  const cachedPlans = readCache<{ plans?: Plan[] }>(PANEL_KEYS.plans)
+  const [plans, setPlans] = useState<Plan[]>(cachedPlans?.plans ?? [])
   const [available, setAvailable] = useState(true)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(cachedPlans == null)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [fitLines, setFitLines] = useState<Record<string, string>>({})
@@ -61,15 +63,21 @@ export function Plans({ getToken }: { getToken: () => Promise<string | null> }) 
 
   async function refresh() {
     const token = await sessionToken(getToken)
-    const body = await listPlans(token)
+    const body = await refreshCached(PANEL_KEYS.plans, () => listPlans(token))
     setPlans(body.plans ?? [])
     setAvailable(true)
   }
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    refresh()
+    if (readCache(PANEL_KEYS.plans) == null) setLoading(true)
+    sessionToken(getToken)
+      .then((token) => loadCached(PANEL_KEYS.plans, () => listPlans(token)))
+      .then((body) => {
+        if (cancelled) return
+        setPlans(body.plans ?? [])
+        setAvailable(true)
+      })
       .catch(() => {
         if (!cancelled) {
           setAvailable(false)
@@ -98,7 +106,9 @@ export function Plans({ getToken }: { getToken: () => Promise<string | null> }) 
         await Promise.all(
           joined.map(async (plan) => {
             try {
-              const matches = await listPlanMatches(token, plan.id)
+              const matches = await loadCached(PANEL_KEYS.planMatches(plan.id), () =>
+                listPlanMatches(token, plan.id),
+              )
               const top = matches?.[0]
               if (!top) return
               next[plan.id] = compatibilityLine(top)

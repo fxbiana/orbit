@@ -49,6 +49,8 @@ vi.mock("./api", () => ({
   acceptConnection: vi.fn(),
   rejectConnection: vi.fn(),
   listMessages: vi.fn(async () => ({ messages: [] })),
+  listTickets: vi.fn(async () => ({ tickets: [] })),
+  listPlanMatches: vi.fn(async () => []),
   sendMessage: vi.fn(),
   ACTIVITY_TYPES: ["coffee", "study", "workshop", "other"],
 }))
@@ -221,6 +223,13 @@ it("starts a blank form when this account has no profile", async () => {
   expect(screen.getByLabelText("First name")).toHaveValue("")
   expect(screen.getByLabelText("Age")).toHaveValue(null)
   expect(screen.getByLabelText("City")).toHaveValue("")
+  fireEvent.focus(screen.getByLabelText("City"))
+  fireEvent.change(screen.getByLabelText("City"), { target: { value: "port" } })
+  expect(screen.getByRole("option", { name: "Portland" })).toBeInTheDocument()
+  expect(screen.queryByRole("option", { name: "Seattle" })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole("option", { name: "Portland" }))
+  expect(screen.getByLabelText("City")).toHaveValue("Portland")
+  fireEvent.change(screen.getByLabelText("City"), { target: { value: "" } })
   fireEvent.change(screen.getByLabelText("User name"), { target: { value: "priya" } })
   fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Priya" } })
   fireEvent.change(screen.getByLabelText("Age"), { target: { value: "27" } })

@@ -511,6 +511,44 @@ h3,
   font-weight: 700;
 }
 
+.city-field {
+  position: relative;
+}
+
+.city-options {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+}
+
+.city-options li {
+  margin: 0;
+}
+
+.city-options button {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--hearth);
+  font-weight: 600;
+  text-align: left;
+}
+
+.city-options button[aria-selected="true"],
+.city-options button:hover {
+  background: var(--blush);
+}
+
 .onboarding label,
 .save-form label,
 .reach-form label,

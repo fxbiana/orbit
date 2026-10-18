@@ -29,6 +29,7 @@ Apply these rules whenever you change the website or extension appearance.
 ## City
 
 - City is a text field, not a map.
-- The field lists the allowed cities and uses `autoComplete="address-level2"` so the browser can fill it.
+- The field lists the allowed cities in a menu attached under the input. Do not use a native datalist; that menu opens away from the field.
+- The input uses `autoComplete="address-level2"` so the browser can fill it.
 - A typed value is kept as the listed city when it matches one, including a browser value like `Seattle, WA`.
 - Do not add a world map, country tap target, or pin picker back onto onboarding.

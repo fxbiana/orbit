@@ -7,6 +7,7 @@ import {
   type Match,
   type NearbyEvent,
 } from "./api"
+import { PANEL_KEYS, invalidatePanels, loadCached, readCache } from "./panelCache"
 
 function formatWhen(value: string | null): string | null {
   if (!value) return null
@@ -37,25 +38,32 @@ function personForEvent(event: NearbyEvent, matches: Match[]): Match | null {
 }
 
 export function NearbyEvents({ getToken }: { getToken: () => Promise<string | null> }) {
-  const [events, setEvents] = useState<NearbyEvent[]>([])
-  const [matches, setMatches] = useState<Match[]>([])
-  const [city, setCity] = useState("")
-  const [preferences, setPreferences] = useState<string[]>([])
+  const cachedEvents = readCache<{
+    events?: NearbyEvent[]
+    city?: string
+    preferences?: string[]
+  }>(PANEL_KEYS.events)
+  const cachedMatches = readCache<{ matches?: Match[] }>(PANEL_KEYS.matches)
+  const [events, setEvents] = useState<NearbyEvent[]>(cachedEvents?.events ?? [])
+  const [matches, setMatches] = useState<Match[]>(cachedMatches?.matches ?? [])
+  const [city, setCity] = useState(cachedEvents?.city ?? "")
+  const [preferences, setPreferences] = useState<string[]>(cachedEvents?.preferences ?? [])
   const [message, setMessage] = useState<string | null>(null)
   const [planError, setPlanError] = useState<string | null>(null)
   const [posted, setPosted] = useState<Record<string, boolean>>({})
   const [busyId, setBusyId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(cachedEvents == null)
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
+    if (readCache(PANEL_KEYS.events) == null) setLoading(true)
     sessionToken(getToken)
       .then(async (token) => {
-        const eventsBody = await listNearbyEvents(token)
+        const eventsBody = await loadCached(PANEL_KEYS.events, () => listNearbyEvents(token))
         let people: Match[] = []
         try {
-          people = (await listMatches(token)).matches ?? []
+          const body = await loadCached(PANEL_KEYS.matches, () => listMatches(token, 50))
+          people = body.matches ?? []
         } catch {
           people = []
         }
@@ -96,6 +104,7 @@ export function NearbyEvents({ getToken }: { getToken: () => Promise<string | nu
         starts_at: event.starts_at ?? undefined,
         capacity: 2,
       })
+      invalidatePanels([PANEL_KEYS.plans])
       setPosted((current) => ({ ...current, [event.external_id]: true }))
     } catch (err) {
       setPlanError(err instanceof Error ? err.message : "Could not post that plan.")

@@ -1,17 +1,19 @@
 import { FormEvent, useEffect, useState } from "react"
 import { createTicket, listTickets, sessionToken, type Ticket } from "./api"
+import { PANEL_KEYS, loadCached, readCache, refreshCached } from "./panelCache"
 
 export function SavePage({ getToken }: { getToken: () => Promise<string | null> }) {
   const [title, setTitle] = useState("")
   const [url, setUrl] = useState("")
-  const [tickets, setTickets] = useState<Ticket[]>([])
+  const cached = readCache<{ tickets: Ticket[] }>(PANEL_KEYS.tickets)
+  const [tickets, setTickets] = useState<Ticket[]>(cached?.tickets ?? [])
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     sessionToken(getToken)
-      .then((token) => listTickets(token))
+      .then((token) => loadCached(PANEL_KEYS.tickets, () => listTickets(token)))
       .then((body) => {
         if (!cancelled) setTickets(body.tickets)
       })
@@ -35,7 +37,7 @@ export function SavePage({ getToken }: { getToken: () => Promise<string | null> 
     try {
       const token = await sessionToken(getToken)
       await createTicket(token, next)
-      const body = await listTickets(token)
+      const body = await refreshCached(PANEL_KEYS.tickets, () => listTickets(token))
       setTickets(body.tickets)
       setTitle("")
       setUrl("")

@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react"
 import { createConnection, listMatches, sessionToken, type Match } from "./api"
+import { PANEL_KEYS, loadCached, readCache } from "./panelCache"
 import { GATHERING_SIZES, type OnboardingInput } from "./onboarding"
 import type { LinkStatus } from "./Reach"
 
@@ -171,17 +172,18 @@ export function Matches({
   links?: Record<string, LinkStatus>
   onConnected?: () => void
 }) {
-  const [people, setPeople] = useState<MatchPerson[]>([])
+  const cached = readCache<{ matches?: Match[] }>(PANEL_KEYS.matches)
+  const [people, setPeople] = useState<MatchPerson[]>(() => (cached?.matches ?? []).map(fromApi))
   const [page, setPage] = useState(0)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(cached == null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
+    if (readCache(PANEL_KEYS.matches) == null) setLoading(true)
     setError(null)
     sessionToken(getToken)
-      .then((token) => listMatches(token, FETCH_LIMIT))
+      .then((token) => loadCached(PANEL_KEYS.matches, () => listMatches(token, FETCH_LIMIT)))
       .then((body) => {
         if (cancelled) return
         setPeople((body.matches ?? []).map(fromApi))

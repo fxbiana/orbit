@@ -14,6 +14,7 @@ import {
   type PreferredChannel,
   type PublicContact,
 } from "./api"
+import { PANEL_KEYS, loadCached, readCache, refreshCached, writeCache } from "./panelCache"
 
 export type LinkStatus = "out" | "in" | "accepted"
 
@@ -342,16 +343,17 @@ function Thread({
   name: string
   getToken: () => Promise<string | null>
 }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const cachedMessages = readCache<{ messages?: ChatMessage[] }>(PANEL_KEYS.messages(connectionId))
+  const [messages, setMessages] = useState<ChatMessage[]>(cachedMessages?.messages ?? [])
   const [text, setText] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
-  const [loaded, setLoaded] = useState(false)
+  const [loaded, setLoaded] = useState(cachedMessages != null)
 
   useEffect(() => {
     let cancelled = false
     sessionToken(getToken)
-      .then((token) => listMessages(token, connectionId))
+      .then((token) => loadCached(PANEL_KEYS.messages(connectionId), () => listMessages(token, connectionId)))
       .then((body) => {
         if (cancelled) return
         setMessages(body.messages ?? [])
@@ -375,7 +377,11 @@ function Thread({
     setError(null)
     try {
       const sent = await sendMessage(await sessionToken(getToken), connectionId, trimmed)
-      setMessages((current) => [...current, sent])
+      setMessages((current) => {
+        const next = [...current, sent]
+        writeCache(PANEL_KEYS.messages(connectionId), { messages: next })
+        return next
+      })
       setText("")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not send that message.")
@@ -449,7 +455,8 @@ export function ContactForm({
   getToken: () => Promise<string | null>
   sideAction?: ReactNode
 }) {
-  const [draft, setDraft] = useState<ContactDraft>(EMPTY_DRAFT)
+  const cachedContact = readCache<Contact>(PANEL_KEYS.contact)
+  const [draft, setDraft] = useState<ContactDraft>(cachedContact ? draftFrom(cachedContact) : EMPTY_DRAFT)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -457,7 +464,7 @@ export function ContactForm({
   useEffect(() => {
     let cancelled = false
     sessionToken(getToken)
-      .then((token) => getContact(token))
+      .then((token) => loadCached(PANEL_KEYS.contact, () => getContact(token)))
       .then((contact) => {
         if (!cancelled) setDraft(draftFrom(contact))
       })
@@ -482,6 +489,7 @@ export function ContactForm({
     setSaved(false)
     try {
       const stored = await saveContact(await sessionToken(getToken), contactToSave(draft))
+      writeCache(PANEL_KEYS.contact, stored)
       setDraft(draftFrom(stored))
       setSaved(true)
     } catch (err) {
@@ -515,20 +523,25 @@ export function Reach({
   refreshKey?: number
   onLinks?: (links: Record<string, LinkStatus>) => void
 }) {
-  const [inbox, setInbox] = useState<Connection[]>([])
-  const [outbox, setOutbox] = useState<Connection[]>([])
-  const [friends, setFriends] = useState<Connection[]>([])
+  const cachedInbox = readCache<{ connections?: Connection[] }>(PANEL_KEYS.inbox)
+  const cachedOutbox = readCache<{ connections?: Connection[] }>(PANEL_KEYS.outbox)
+  const cachedFriends = readCache<{ connections?: Connection[] }>(PANEL_KEYS.friends)
+  const warmed = cachedInbox != null && cachedOutbox != null && cachedFriends != null
+  const [inbox, setInbox] = useState<Connection[]>(cachedInbox?.connections ?? [])
+  const [outbox, setOutbox] = useState<Connection[]>(cachedOutbox?.connections ?? [])
+  const [friends, setFriends] = useState<Connection[]>(cachedFriends?.connections ?? [])
   const [available, setAvailable] = useState(true)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!warmed)
   const [actionError, setActionError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
 
-  async function reload() {
+  async function loadBoxes(refresh: boolean) {
     const token = await sessionToken(getToken)
+    const read = refresh ? refreshCached : loadCached
     const [incoming, outgoing, accepted] = await Promise.all([
-      listConnections(token, "inbox"),
-      listConnections(token, "outbox"),
-      listConnections(token, "friends"),
+      read(PANEL_KEYS.inbox, () => listConnections(token, "inbox")),
+      read(PANEL_KEYS.outbox, () => listConnections(token, "outbox")),
+      read(PANEL_KEYS.friends, () => listConnections(token, "friends")),
     ])
     setInbox(incoming.connections ?? [])
     setOutbox(outgoing.connections ?? [])
@@ -538,8 +551,14 @@ export function Reach({
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    reload()
+    if (
+      readCache(PANEL_KEYS.inbox) == null ||
+      readCache(PANEL_KEYS.outbox) == null ||
+      readCache(PANEL_KEYS.friends) == null
+    ) {
+      setLoading(true)
+    }
+    loadBoxes(false)
       .catch(() => {
         if (!cancelled) setAvailable(false)
       })
@@ -567,7 +586,7 @@ export function Reach({
       const token = await sessionToken(getToken)
       if (action === "accept") await acceptConnection(token, connectionId)
       else await rejectConnection(token, connectionId)
-      await reload()
+      await loadBoxes(true)
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Could not update that request.")
     } finally {

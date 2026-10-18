@@ -1,5 +1,14 @@
-import { FormEvent, Fragment, ReactNode, useCallback, useEffect, useState } from "react"
+import { FormEvent, Fragment, ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import { getContact, getOnboarding, saveContact, saveOnboarding, sessionToken } from "./api"
+import {
+  PANEL_KEYS,
+  invalidateConnections,
+  invalidatePanels,
+  linksFromCache,
+  loadCached,
+  warmPanels,
+  writeCache,
+} from "./panelCache"
 import { Matches } from "./Matches"
 import { NearbyEvents } from "./NearbyEvents"
 import { Plans } from "./Plans"
@@ -222,12 +231,11 @@ function spotifySummaryText(genres: string[], artists: { name: string }[]): stri
   const names = new Set(
     artists.map((artist) => artist.name.trim().toLocaleLowerCase()).filter((name) => name.length > 0),
   )
-  const namedArtists =
-    artists.length > 0 && genres.length > 0 && genres.every((genre) => names.has(genre.trim().toLocaleLowerCase()))
-  if (namedArtists) return null
-  if (genres.length > 0) return `Spotify suggested: ${genres.join(", ")}`
-  if (artists.some((artist) => artist.name.trim().length > 0)) return null
-  return "Spotify did not find genres to suggest."
+  const labels = genres
+    .map((genre) => genre.trim())
+    .filter((genre) => genre.length > 0 && !names.has(genre.toLocaleLowerCase()))
+  if (labels.length === 0) return null
+  return `Spotify suggested: ${labels.join(", ")}`
 }
 
 function ProfilePanel({
@@ -315,7 +323,7 @@ export function OnboardingForm({
       .then(async (token) => {
         const [profile, storedContact] = await Promise.all([
           getOnboarding(token),
-          getContact(token).catch(() => null),
+          loadCached(PANEL_KEYS.contact, () => getContact(token)).catch(() => null),
         ])
         return { profile, storedContact }
       })
@@ -346,6 +354,27 @@ export function OnboardingForm({
       cancelled = true
     }
   }, [getToken])
+
+  const warmedKey = useRef(0)
+
+  useEffect(() => {
+    if (phase !== "people" || !viewer) return
+    let cancelled = false
+    if (reachKey !== warmedKey.current) {
+      warmedKey.current = reachKey
+      invalidateConnections()
+    }
+    warmPanels(getToken)
+      .then(() => {
+        if (!cancelled) setLinks(linksFromCache())
+      })
+      .catch(() => {
+        /* A panel that failed stays empty until that tab loads it. */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [phase, viewer, getToken, reachKey])
 
   useEffect(() => {
     if (profileOpen) setProfileDismissed(false)
@@ -414,11 +443,15 @@ export function OnboardingForm({
           festivals: mergeTopicDraft(current.festivals, result.suggestions.festivals, kept),
         }
       })
-      setSpotifyGenres(result.genres)
-      setSpotifyArtists(
-        result.artists.filter((artist) => artist.name.trim().length > 0).slice(0, TOP_ARTISTS),
+      const ranked = result.artists.filter((artist) => artist.name.trim().length > 0)
+      const shown = ranked.slice(0, TOP_ARTISTS)
+      const artistNames = new Set(ranked.map((artist) => artist.name.trim().toLocaleLowerCase()))
+      const genreLabels = result.genres.filter(
+        (genre) => !artistNames.has(genre.trim().toLocaleLowerCase()),
       )
-      setSpotifySummary(spotifySummaryText(result.genres, result.artists))
+      setSpotifyGenres(genreLabels)
+      setSpotifyArtists(shown)
+      setSpotifySummary(spotifySummaryText(genreLabels, shown))
     } catch (err) {
       setSpotifyError(err instanceof Error ? err.message : "Spotify import failed")
     } finally {
@@ -471,7 +504,9 @@ export function OnboardingForm({
     try {
       const token = await sessionToken(getToken)
       await saveOnboarding(token, input)
-      await saveContact(token, contactToSave(contact))
+      const stored = await saveContact(token, contactToSave(contact))
+      writeCache(PANEL_KEYS.contact, stored)
+      invalidatePanels([PANEL_KEYS.matches, PANEL_KEYS.events])
       setViewer(input)
       setPhase("people")
     } catch (err) {
