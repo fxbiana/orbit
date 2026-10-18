@@ -154,10 +154,15 @@ def validate_suggestions(raw) -> dict:
     return suggestions
 
 
+def genres_from_listening(listening: dict) -> list[str]:
+    """Normalized genre labels from string genres on top artists."""
+    return normalize_genres(_listening_genre_strings(listening))
+
+
 def fallback_suggestions(listening: dict) -> dict:
     """Genre chips and festival styles when a model is not used."""
     suggestions = empty_suggestions()
-    genres = normalize_genres(_listening_genre_strings(listening))
+    genres = genres_from_listening(listening)
     suggestions["interests"]["knows"] = genres[:_MAX_SUGGESTIONS]
     suggestions["festivals"]["knows"] = _festivals_for_genres(genres)
     return suggestions

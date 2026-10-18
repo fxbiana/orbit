@@ -27,7 +27,7 @@ import {
   type Knowledge,
   type OnboardingInput,
 } from "./onboarding"
-import { importSpotify } from "./spotify"
+import { importSpotify, type SpotifySuggestions } from "./spotify"
 
 type TopicDraft = { knows: string; wants: string }
 
@@ -111,6 +111,27 @@ function toInput(draft: Draft): OnboardingInput {
 
 function mergeCommaList(current: string, incoming: string[]): string {
   return formatList(parseList(`${current},${incoming.join(",")}`))
+}
+
+function mergeGrouped(
+  current: string,
+  suggestions: SpotifySuggestions,
+  side: "knows" | "wants_to_learn",
+): string {
+  const topics = [
+    suggestions.locations,
+    suggestions.hobbies,
+    suggestions.interests,
+    suggestions.festivals,
+  ]
+  return topics.reduce((text, topic) => mergeCommaList(text, topic[side]), current)
+}
+
+function spotifySummaryText(genres: string[], artists: { name: string }[]): string {
+  if (genres.length > 0) return `Spotify suggested: ${genres.join(", ")}`
+  const names = artists.map((artist) => artist.name.trim()).filter((name) => name.length > 0)
+  if (names.length > 0) return `Spotify suggested artists: ${names.join(", ")}`
+  return "Spotify did not find genres to suggest."
 }
 
 function ProfilePanel({
@@ -288,12 +309,16 @@ export function OnboardingForm({
       const result = await importSpotify(getToken)
       setDraft((current) => ({
         ...current,
+        languages: {
+          knows: mergeCommaList(current.languages.knows, result.suggestions.languages.knows),
+          wants: mergeCommaList(current.languages.wants, result.suggestions.languages.wants_to_learn),
+        },
         preferences: {
-          knows: mergeCommaList(current.preferences.knows, result.suggestions.knows),
-          wants: mergeCommaList(current.preferences.wants, result.suggestions.wants_to_learn),
+          knows: mergeGrouped(current.preferences.knows, result.suggestions, "knows"),
+          wants: mergeGrouped(current.preferences.wants, result.suggestions, "wants_to_learn"),
         },
       }))
-      setSpotifySummary(`Spotify suggested: ${result.genres.join(", ")}`)
+      setSpotifySummary(spotifySummaryText(result.genres, result.artists))
     } catch (err) {
       setSpotifyError(err instanceof Error ? err.message : "Spotify import failed")
     } finally {

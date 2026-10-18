@@ -10,6 +10,7 @@ from app.spotify import (
     fallback_suggestions,
     fetch_listening,
     fetch_top_artist_genres,
+    genres_from_listening,
     normalize_genres,
     suggest_from_listening,
     validate_suggestions,
@@ -108,16 +109,45 @@ def test_fetch_top_artist_genres_http_error():
         fetch_top_artist_genres("spotify-token", opener=opener)
 
 
+def test_genres_from_listening_normalizes_top_artist_genres():
+    listening = {
+        "top_artists": [
+            {"name": "Someone", "genres": ["  alt   rock ", "ALT ROCK", "jazz", ""]},
+            "not-a-dict",
+            {"name": "Missing"},
+            {"name": "Nope", "genres": [None, 3]},
+        ]
+    }
+    assert genres_from_listening(listening) == ["Alt Rock", "Jazz"]
+    assert genres_from_listening({}) == []
+
+
 def test_import_normalizes_genres_and_stores_snapshot_without_token(client, monkeypatch):
     store = _Client()
+    listening = {
+        "recent_tracks": [
+            {"name": "Baby", "artists": ["Four Tet"], "album": "", "played_at": ""}
+        ],
+        "top_tracks": [],
+        "top_artists": [
+            {"name": "Someone", "genres": ["  alt   rock ", "ALT ROCK", "jazz", ""]},
+        ],
+    }
+    suggestions = empty_suggestions()
+    suggestions["interests"]["knows"] = ["Alt Rock", "Jazz"]
+    suggestions["festivals"]["knows"] = ["Rock", "Jazz"]
     monkeypatch.setattr("app.firebase.firestore_client", lambda: store)
     monkeypatch.setattr(
         "app.routes.spotify.spotify_access_token",
         lambda user_id, secret_key: "should-not-be-stored",
     )
     monkeypatch.setattr(
-        "app.routes.spotify.fetch_top_artist_genres",
-        lambda access_token, opener=None: ["  alt   rock ", "ALT ROCK", "jazz", ""],
+        "app.routes.spotify.fetch_listening",
+        lambda access_token, opener=None: listening,
+    )
+    monkeypatch.setattr(
+        "app.routes.spotify.suggest_from_listening",
+        lambda *args, **kwargs: (suggestions, None),
     )
 
     response = client.post(
@@ -129,8 +159,12 @@ def test_import_normalizes_genres_and_stores_snapshot_without_token(client, monk
     assert response.status_code == 200
     body = response.get_json()
     assert body == {
+        "artists": listening["top_artists"],
+        "tracks": listening["recent_tracks"],
+        "top_tracks": [],
         "genres": ["Alt Rock", "Jazz"],
-        "suggestions": {"knows": ["Alt Rock", "Jazz"], "wants_to_learn": []},
+        "suggestions": suggestions,
+        "model": None,
     }
 
     snapshot = (
@@ -141,11 +175,24 @@ def test_import_normalizes_genres_and_stores_snapshot_without_token(client, monk
         .data
     )
     assert snapshot["genres"] == ["Alt Rock", "Jazz"]
+    assert snapshot["artists"] == listening["top_artists"]
+    assert snapshot["tracks"] == listening["recent_tracks"]
+    assert snapshot["top_tracks"] == []
+    assert snapshot["suggestions"] == suggestions
+    assert snapshot["model"] == ""
     assert snapshot["source"] == "clerk_spotify"
     assert snapshot["imported_at"] is not None
     assert "access_token" not in snapshot
     assert "token" not in snapshot
     assert "should-not-be-stored" not in json.dumps(snapshot, default=str)
+    onboarding = (
+        store.collection("users")
+        .document("user_123")
+        .collection("profile")
+        .document("onboarding")
+        .data
+    )
+    assert onboarding is None
 
 
 def test_import_without_spotify_returns_404(client, monkeypatch):
@@ -153,7 +200,8 @@ def test_import_without_spotify_returns_404(client, monkeypatch):
         raise AssertionError("Spotify was called without a token")
 
     monkeypatch.setattr("app.routes.spotify.spotify_access_token", lambda user_id, secret_key: None)
-    monkeypatch.setattr("app.routes.spotify.fetch_top_artist_genres", fail_fetch)
+    monkeypatch.setattr("app.routes.spotify.fetch_listening", fail_fetch)
+    monkeypatch.setattr("app.routes.spotify.suggest_from_listening", fail_fetch)
     monkeypatch.setattr(
         "app.routes.spotify.save_spotify_snapshot",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("snapshot was written")),
@@ -163,6 +211,27 @@ def test_import_without_spotify_returns_404(client, monkeypatch):
 
     assert response.status_code == 404
     assert response.get_json()["error"] == "Connect Spotify before importing preferences"
+
+
+def test_import_spotify_failure_returns_502(client, monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("should not be called")
+
+    def fetch_failed(access_token, opener=None):
+        raise SpotifyImportError("Spotify recently played request failed (403)")
+
+    monkeypatch.setattr(
+        "app.routes.spotify.spotify_access_token",
+        lambda user_id, secret_key: "spotify-token",
+    )
+    monkeypatch.setattr("app.routes.spotify.fetch_listening", fetch_failed)
+    monkeypatch.setattr("app.routes.spotify.suggest_from_listening", fail)
+    monkeypatch.setattr("app.routes.spotify.save_spotify_snapshot", fail)
+
+    response = client.post("/api/spotify/import", headers={"X-User-Id": "user_123"})
+
+    assert response.status_code == 502
+    assert response.get_json()["error"] == "Spotify recently played request failed (403)"
 
 
 _RECENT_URL = "https://api.spotify.com/v1/me/player/recently-played?limit=50"

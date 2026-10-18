@@ -192,7 +192,17 @@ it("merges Spotify suggestions into grouped preferences and leaves about fields 
       ok: true,
       json: async () => ({
         genres: ["jazz", "indie"],
-        suggestions: { knows: ["Jazz", "cooking"], wants_to_learn: ["Tabla"] },
+        artists: [{ name: "Miles Davis", genres: ["jazz"] }],
+        tracks: [{ name: "So What", artists: ["Miles Davis"] }],
+        top_tracks: [{ name: "Ignored", artists: ["Nobody"] }],
+        model: null,
+        suggestions: {
+          languages: { knows: ["Spanish"], wants_to_learn: [] },
+          interests: { knows: ["Jazz"], wants_to_learn: [] },
+          hobbies: { knows: [], wants_to_learn: ["Tabla"] },
+          festivals: { knows: ["Jazz"], wants_to_learn: [] },
+          locations: { knows: [], wants_to_learn: ["Berlin"] },
+        },
         location: "Seattle",
         username: "hacked",
         first_name: "Nope",
@@ -211,7 +221,8 @@ it("merges Spotify suggestions into grouped preferences and leaves about fields 
 
   expect(await screen.findByText("Spotify suggested: jazz, indie")).toBeInTheDocument()
   expect(screen.getByLabelText("Preferences you already have")).toHaveValue("Cooking, Diwali, Jazz")
-  expect(screen.getByLabelText("Preferences you want")).toHaveValue("Tabla")
+  expect(screen.getByLabelText("Preferences you want")).toHaveValue("Berlin, Tabla")
+  expect(screen.getByLabelText("Languages you speak")).toHaveValue("Spanish")
   expect(fetch).toHaveBeenCalledWith(
     "http://localhost:5000/api/spotify/import",
     expect.objectContaining({
