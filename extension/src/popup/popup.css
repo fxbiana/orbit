@@ -94,9 +94,31 @@ button.ghost {
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
   margin-top: 16px;
+}
+
+.after-save {
+  margin-top: 16px;
+}
+
+.secondary-cta {
+  display: inline-block;
+  margin-top: 8px;
+  color: #c4511a;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .error {
