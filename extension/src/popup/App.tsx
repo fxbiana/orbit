@@ -7,8 +7,17 @@ import {
   useAuth,
 } from "@clerk/chrome-extension"
 import { useEffect, useState } from "react"
-import { readActiveTab } from "../tabs"
+import { readTabForSave } from "../tabs"
 import { createTicket, sessionToken, webAppUrl } from "./api"
+
+function BrandMark() {
+  return (
+    <h1 className="brand">
+      <img src="/orbit-logo.png" alt="" />
+      <span className="sr">Orbit</span>
+    </h1>
+  )
+}
 
 export function App() {
   const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
@@ -28,9 +37,11 @@ export function App() {
     >
       <main className="popup">
         <header className="bar">
-          <h1>Orbit</h1>
+          <BrandMark />
           <Show when="signed-in">
-            <UserButton />
+            <div className="account">
+              <UserButton />
+            </div>
           </Show>
         </header>
         <Show when="signed-out">
@@ -51,15 +62,18 @@ export function App() {
 /** Shown when Clerk is not configured. UI still works; save is copy-URL only. */
 function DegradedPopup() {
   const [tab, setTab] = useState<{ title: string; url: string } | null>(null)
+  const [sample, setSample] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const site = webAppUrl()
 
   useEffect(() => {
     let cancelled = false
-    readActiveTab()
+    readTabForSave()
       .then((active) => {
-        if (!cancelled) setTab(active)
+        if (cancelled) return
+        setTab({ title: active.title, url: active.url })
+        setSample(active.sample)
       })
       .catch((err: Error) => {
         if (!cancelled) setError(err.message)
@@ -83,7 +97,7 @@ function DegradedPopup() {
   return (
     <main className="popup">
       <header className="bar">
-        <h1>Orbit</h1>
+        <BrandMark />
       </header>
       <p className="note">
         Set VITE_CLERK_PUBLISHABLE_KEY in extension/.env to save with your account. Until then, copy
@@ -91,6 +105,9 @@ function DegradedPopup() {
       </p>
       <section>
         <h2>This tab</h2>
+        {sample ? (
+          <p className="note">Chrome could not read this tab, so this is a sample event page.</p>
+        ) : null}
         <p className="title">{tab?.title ?? "Reading the active tab..."}</p>
         {tab?.url ? <p className="url">{tab.url}</p> : null}
         <div className="actions">
@@ -139,6 +156,7 @@ function SignedInApp() {
 
 export function TicketPanel({ getToken }: { getToken: () => Promise<string | null> }) {
   const [tab, setTab] = useState<{ title: string; url: string } | null>(null)
+  const [sample, setSample] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -146,9 +164,11 @@ export function TicketPanel({ getToken }: { getToken: () => Promise<string | nul
 
   useEffect(() => {
     let cancelled = false
-    readActiveTab()
+    readTabForSave()
       .then((active) => {
-        if (!cancelled) setTab(active)
+        if (cancelled) return
+        setTab({ title: active.title, url: active.url })
+        setSample(active.sample)
       })
       .catch((err: Error) => {
         if (!cancelled) setError(err.message)
@@ -179,6 +199,9 @@ export function TicketPanel({ getToken }: { getToken: () => Promise<string | nul
     <>
       <section>
         <h2>This tab</h2>
+        {sample ? (
+          <p className="note">Chrome could not read this tab, so this is a sample event page.</p>
+        ) : null}
         <p className="title">{tab?.title ?? "Reading the active tab..."}</p>
         {tab?.url ? <p className="url">{tab.url}</p> : null}
         <button type="button" onClick={save} disabled={!tab || saving}>

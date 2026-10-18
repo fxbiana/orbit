@@ -159,7 +159,7 @@ export function DemoDesk() {
   }
 
   return (
-    <section className="desk">
+    <section className="desk" id="try-seattle">
       <h2>Try it as someone in Seattle</h2>
       <p className="note">
         {`You are in ${VIEWER_PROFILE.location}. You want to learn Spanish and dance. This walkthrough uses the seeded people and shows, with no sign-in.`}

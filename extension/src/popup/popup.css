@@ -1,7 +1,7 @@
 :root {
-  color: #14202b;
-  background: #e7eef2;
-  font: 15px/1.45 "Avenir Next", "Segoe UI", sans-serif;
+  color: #f4f6ff;
+  background: #070914;
+  font: 15px/1.45 Nunito, "Avenir Next", "Segoe UI", sans-serif;
 }
 
 html,
@@ -16,38 +16,51 @@ body {
 }
 
 .bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
 }
 
-h1 {
+.brand {
+  grid-column: 2;
+  justify-self: center;
   margin: 0;
-  font-family: Palatino, "Iowan Old Style", Georgia, serif;
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
+  line-height: 0;
+}
+
+.brand img {
+  display: block;
+  width: 128px;
+  height: auto;
+}
+
+.account {
+  grid-column: 3;
+  justify-self: end;
+}
+
+h1,
+h2,
+h3 {
+  font-family: Outfit, Nunito, sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.04em;
 }
 
 h2 {
   margin: 4px 0 8px;
-  font-family: Palatino, "Iowan Old Style", Georgia, serif;
   font-size: 28px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
 }
 
 h3 {
   margin: 0;
-  font-family: Palatino, "Iowan Old Style", Georgia, serif;
   font-size: 18px;
-  font-weight: 600;
 }
 
 .step-count {
   margin: 16px 0 0;
-  color: #3e6b73;
+  color: #cbb8ff;
   font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -60,16 +73,16 @@ h3 {
 
 .url {
   margin: 4px 0 10px;
-  color: #5c727a;
+  color: #a8b0cc;
   word-break: break-all;
 }
 
 button {
   border: 0;
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 8px 14px;
-  background: #c4511a;
-  color: #fff;
+  background: linear-gradient(115deg, #6d7cff 0%, #b48cff 52%, #f0a878 100%);
+  color: #070914;
   font: inherit;
   cursor: pointer;
 }
@@ -82,14 +95,14 @@ button:disabled {
 button:focus-visible,
 input:focus-visible,
 summary:focus-visible {
-  outline: 2px solid #c4511a;
+  outline: 2px solid #7d8cff;
   outline-offset: 2px;
 }
 
 button.ghost {
   background: transparent;
-  color: #14202b;
-  box-shadow: inset 0 0 0 1px #8aa0aa;
+  color: #f4f6ff;
+  box-shadow: inset 0 0 0 1px #5a6898;
 }
 
 .actions {
@@ -108,7 +121,7 @@ button.ghost {
 .secondary-cta {
   display: inline-block;
   margin-top: 8px;
-  color: #c4511a;
+  color: #f0a878;
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -123,18 +136,18 @@ button.ghost {
 
 .error {
   margin: 12px 0 0;
-  color: #9f1239;
+  color: #ffb4c4;
 }
 
 .note {
   margin: 0 0 8px;
-  color: #3e6b73;
+  color: #cbb8ff;
 }
 
 .onboarding label {
   display: block;
   margin-top: 12px;
-  color: #14202b;
+  color: #f4f6ff;
   font-size: 13px;
 }
 
@@ -146,9 +159,9 @@ button.ghost {
   box-sizing: border-box;
   margin-top: 4px;
   padding: 8px;
-  border: 1px solid #c5d2d8;
-  border-radius: 2px;
-  background: #fff;
+  border: 1px solid #2e3a62;
+  border-radius: 8px;
+  background: #0c1224;
   color: inherit;
   font-family: inherit;
   font-size: 15px;
@@ -176,13 +189,13 @@ button.ghost {
   gap: 10px;
   margin-top: 8px;
   padding: 10px 12px;
-  background: #fff;
-  box-shadow: inset 0 0 0 1px #c5d2d8;
+  background: #0c1224;
+  box-shadow: inset 0 0 0 1px #2e3a62;
   font-size: 15px;
 }
 
 .choice:has(input:checked) {
-  box-shadow: inset 0 0 0 2px #c4511a;
+  box-shadow: inset 0 0 0 2px #7d8cff;
 }
 
 .choice input {
@@ -204,7 +217,7 @@ button.ghost {
   gap: 10px;
   align-items: start;
   padding: 8px 0;
-  border-bottom: 1px solid #d5dee4;
+  border-bottom: 1px solid #2e3a62;
 }
 
 .person.lead {
@@ -213,7 +226,7 @@ button.ghost {
   margin-top: 8px;
   padding: 14px;
   border: 0;
-  background: #fff;
+  background: #12182c;
 }
 
 .person.lead h3 {
@@ -223,7 +236,7 @@ button.ghost {
 .stamp,
 .score {
   margin: 0;
-  font-family: Palatino, "Iowan Old Style", Georgia, serif;
+  font-family: Outfit, Nunito, sans-serif;
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
@@ -233,14 +246,14 @@ button.ghost {
   width: 72px;
   height: 72px;
   place-items: center;
-  background: #c4511a;
-  color: #fff;
+  background: linear-gradient(115deg, #6d7cff 0%, #f0a878 100%);
+  color: #070914;
   font-size: 28px;
 }
 
 .score {
   padding-top: 2px;
-  color: #3e6b73;
+  color: #cbb8ff;
   font-size: 18px;
 }
 
@@ -251,12 +264,12 @@ button.ghost {
 }
 
 .reason {
-  color: #14202b;
+  color: #f4f6ff;
 }
 
 .also,
 .meta {
-  color: #5c727a;
+  color: #a8b0cc;
   font-size: 13px;
 }
 
@@ -266,7 +279,7 @@ button.ghost {
 
 .tickets summary {
   cursor: pointer;
-  color: #3e6b73;
+  color: #cbb8ff;
 }
 
 .tickets h2 {
@@ -284,7 +297,19 @@ ul {
 }
 
 a {
-  color: #c4511a;
+  color: #cbb8ff;
+}
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -44,8 +44,8 @@ it("shows sign-in, sign-up, and a way to try a Seattle profile", () => {
   expect(screen.getByRole("button", { name: "Sign up" })).toBeInTheDocument()
   expect(screen.getByRole("heading", { name: "Where Worlds Connect" })).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Try a Seattle profile" })).toBeInTheDocument()
-  expect(screen.queryByRole("heading", { name: "Save the page you already have open." })).not.toBeInTheDocument()
-  expect(screen.queryByLabelText("Sample of the future extension popup")).not.toBeInTheDocument()
+  expect(screen.getByRole("heading", { name: "Save the page you already have open." })).toBeInTheDocument()
+  expect(screen.getByLabelText("Extension popup demo")).toBeInTheDocument()
 })
 
 it("still offers the Seattle demo when the Clerk key is missing", () => {

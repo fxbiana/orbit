@@ -187,6 +187,7 @@ function fillAbout() {
   fireEvent.change(screen.getByLabelText("User name"), { target: { value: "priya" } })
   fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Priya" } })
   fireEvent.change(screen.getByLabelText("Age"), { target: { value: "27" } })
+  fireEvent.click(screen.getByRole("button", { name: "United States" }))
   fireEvent.click(screen.getByRole("button", { name: "Portland" }))
   fireEvent.click(screen.getByRole("radio", { name: "6-15 people" }))
 }
@@ -204,7 +205,7 @@ it("starts a blank form when this account has no profile", async () => {
   expect(screen.getByLabelText("User name")).toHaveValue("")
   expect(screen.getByLabelText("First name")).toHaveValue("")
   expect(screen.getByLabelText("Age")).toHaveValue(null)
-  expect(screen.getByText("Tap a city on the map.")).toBeInTheDocument()
+  expect(screen.getByText("Tap a country, then a city.")).toBeInTheDocument()
   expect(screen.queryByRole("button", { pressed: true })).not.toBeInTheDocument()
   fireEvent.change(screen.getByLabelText("User name"), { target: { value: "priya" } })
   fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Priya" } })
@@ -214,6 +215,7 @@ it("starts a blank form when this account has no profile", async () => {
   expect(screen.getByRole("heading", { name: "About you" })).toBeInTheDocument()
   expect(screen.getByText("Choose a city.")).toBeInTheDocument()
 
+  fireEvent.click(screen.getByRole("button", { name: "United States" }))
   fireEvent.click(screen.getByRole("button", { name: "Portland" }))
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
   expect(screen.getByRole("heading", { name: "How you want to be reached" })).toBeInTheDocument()
