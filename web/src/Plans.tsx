@@ -41,7 +41,7 @@ function planShareUrl(planId: string): string {
 }
 
 function viewerInPlan(plan: Plan): boolean {
-  return plan.viewer_joined === true || plan.joined === true
+  return plan.viewer_joined === true
 }
 
 function compatibilityLine(match: Match): string {

@@ -115,10 +115,36 @@ export function cleanText(value: string): string {
 }
 
 export function parseList(value: string): string[] {
+  return parseListPreserving(value, [])
+}
+
+/** Split a comma list, keeping phrases such as "Tyler, The Creator" intact. */
+export function parseListPreserving(value: string, keep: readonly string[]): string[] {
+  const ranked = [...keep]
+    .map((item) => cleanText(item))
+    .filter((item) => item.includes(","))
+    .sort((left, right) => right.length - left.length)
+
+  let working = value
+  const slots: string[] = []
+  for (const item of ranked) {
+    const needle = item.toLocaleLowerCase()
+    let cursor = 0
+    while (cursor <= working.length) {
+      const found = working.toLocaleLowerCase().indexOf(needle, cursor)
+      if (found === -1) break
+      const token = `\u0000${slots.length}\u0000`
+      slots.push(cleanText(working.slice(found, found + item.length)))
+      working = `${working.slice(0, found)}${token}${working.slice(found + item.length)}`
+      cursor = found + token.length
+    }
+  }
+
   const seen = new Set<string>()
   const items: string[] = []
-  for (const part of value.split(",")) {
-    const text = cleanText(part)
+  for (const part of working.split(",")) {
+    const token = part.match(/^\s*\u0000(\d+)\u0000\s*$/)
+    const text = token ? slots[Number(token[1])] : cleanText(part)
     if (!text) continue
     const key = text.toLocaleLowerCase()
     if (seen.has(key)) continue

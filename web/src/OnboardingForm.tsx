@@ -23,6 +23,7 @@ import {
   cleanText,
   formatList,
   parseList,
+  parseListPreserving,
   unionGrouped,
   validateFlowStep,
   validateOnboarding,
@@ -44,6 +45,7 @@ type Draft = {
   gatheringSize: string
   languages: TopicDraft
   preferences: TopicDraft
+  kept: string[]
 }
 
 const EMPTY_CONTACT: ContactDraft = {
@@ -70,10 +72,13 @@ function emptyDraft(): Draft {
     gatheringSize: "",
     languages: { knows: "", wants: "" },
     preferences: { knows: "", wants: "" },
+    kept: [],
   }
 }
 
 function draftFromProfile(profile: OnboardingInput): Draft {
+  const knows = unionGrouped(profile, "knows")
+  const wants = unionGrouped(profile, "wants_to_learn")
   return {
     username: profile.username,
     firstName: profile.first_name,
@@ -85,9 +90,10 @@ function draftFromProfile(profile: OnboardingInput): Draft {
       wants: formatList(profile.languages.wants_to_learn),
     },
     preferences: {
-      knows: formatList(unionGrouped(profile, "knows")),
-      wants: formatList(unionGrouped(profile, "wants_to_learn")),
+      knows: formatList(knows),
+      wants: formatList(wants),
     },
+    kept: [...knows, ...wants].filter((item) => item.includes(",")),
   }
 }
 
@@ -107,15 +113,15 @@ function toInput(draft: Draft): OnboardingInput {
     hobbies: emptyKnowledge(),
     locations: emptyKnowledge(),
     interests: {
-      knows: parseList(draft.preferences.knows),
-      wants_to_learn: parseList(draft.preferences.wants),
+      knows: parseListPreserving(draft.preferences.knows, draft.kept),
+      wants_to_learn: parseListPreserving(draft.preferences.wants, draft.kept),
     },
     festivals: emptyKnowledge(),
   }
 }
 
-function mergeCommaList(current: string, incoming: string[]): string {
-  const merged = parseList(current)
+function mergeCommaList(current: string, incoming: string[], kept: readonly string[]): string {
+  const merged = parseListPreserving(current, kept)
   const seen = new Set(merged.map((item) => item.toLocaleLowerCase()))
   for (const item of incoming) {
     const text = cleanText(item)
@@ -126,6 +132,18 @@ function mergeCommaList(current: string, incoming: string[]): string {
     merged.push(text)
   }
   return formatList(merged)
+}
+
+function withKept(kept: string[], incoming: string[]): string[] {
+  const seen = new Set(kept.map((item) => item.toLocaleLowerCase()))
+  const next = [...kept]
+  for (const item of incoming) {
+    const text = cleanText(item)
+    if (!text.includes(",") || seen.has(text.toLocaleLowerCase())) continue
+    seen.add(text.toLocaleLowerCase())
+    next.push(text)
+  }
+  return next
 }
 
 function ProfilePanel({
@@ -304,13 +322,18 @@ export function OnboardingForm({
     setSpotifyBusy(true)
     try {
       const result = await importSpotify(getToken)
-      setDraft((current) => ({
-        ...current,
-        preferences: {
-          knows: mergeCommaList(current.preferences.knows, result.suggestions.knows),
-          wants: mergeCommaList(current.preferences.wants, result.suggestions.wants_to_learn),
-        },
-      }))
+      setDraft((current) => {
+        const incoming = [...result.suggestions.knows, ...result.suggestions.wants_to_learn]
+        const kept = withKept(current.kept, incoming)
+        return {
+          ...current,
+          kept,
+          preferences: {
+            knows: mergeCommaList(current.preferences.knows, result.suggestions.knows, kept),
+            wants: mergeCommaList(current.preferences.wants, result.suggestions.wants_to_learn, kept),
+          },
+        }
+      })
       setSpotifySummary(`Spotify suggested: ${result.genres.join(", ")}`)
     } catch (err) {
       setSpotifyError(err instanceof Error ? err.message : "Spotify import failed")
@@ -324,13 +347,18 @@ export function OnboardingForm({
     setMetaBusy(true)
     try {
       const result = await importMeta(getToken)
-      setDraft((current) => ({
-        ...current,
-        languages: {
-          knows: mergeCommaList(current.languages.knows, result.suggestions.knows),
-          wants: mergeCommaList(current.languages.wants, result.suggestions.wants_to_learn),
-        },
-      }))
+      setDraft((current) => {
+        const incoming = [...result.suggestions.knows, ...result.suggestions.wants_to_learn]
+        const kept = withKept(current.kept, incoming)
+        return {
+          ...current,
+          kept,
+          languages: {
+            knows: mergeCommaList(current.languages.knows, result.suggestions.knows, kept),
+            wants: mergeCommaList(current.languages.wants, result.suggestions.wants_to_learn, kept),
+          },
+        }
+      })
       setMetaSummary(`Meta suggested: ${result.languages.join(", ")}`)
     } catch (err) {
       setMetaError(err instanceof Error ? err.message : "Meta import failed")
@@ -530,7 +558,7 @@ export function OnboardingForm({
                     ...current,
                     preferences: {
                       ...current.preferences,
-                      knows: mergeCommaList(current.preferences.knows, [interest]),
+                      knows: mergeCommaList(current.preferences.knows, [interest], current.kept),
                     },
                   }))
                 }

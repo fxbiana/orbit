@@ -284,6 +284,17 @@ it("keeps a comma inside a Spotify artist name", async () => {
   expect(screen.getByLabelText("Preferences you already have")).toHaveValue(
     "Basketball, Tyler, The Creator, Steve Lacy",
   )
+  fireEvent.click(screen.getByRole("button", { name: "Find your people" }))
+  expect(await screen.findByRole("heading", { name: "Priya, people near you" })).toBeInTheDocument()
+  expect(saveOnboarding).toHaveBeenCalledWith(
+    "session-token",
+    expect.objectContaining({
+      interests: {
+        knows: ["Basketball", "Tyler, The Creator", "Steve Lacy"],
+        wants_to_learn: [],
+      },
+    }),
+  )
 })
 
 it("keeps typed preferences when Spotify import fails", async () => {

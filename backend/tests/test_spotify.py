@@ -109,6 +109,26 @@ def test_fetch_top_artist_genres_uses_names_when_genre_lists_are_empty():
     assert labels == ["Steve Lacy", "KAYTRANADA"]
 
 
+def test_fetch_top_artist_genres_tries_shorter_range_when_medium_term_is_empty():
+    calls = []
+
+    def opener(request, timeout=None):
+        calls.append(request.full_url)
+        if "medium_term" in request.full_url:
+            body = json.dumps({"items": []}).encode()
+        else:
+            body = json.dumps({"items": [{"name": "Steve Lacy", "genres": []}]}).encode()
+        return _Body(body)
+
+    labels = fetch_top_artist_genres("spotify-token", opener=opener)
+
+    assert labels == ["Steve Lacy"]
+    assert calls == [
+        "https://api.spotify.com/v1/me/top/artists?limit=20&time_range=medium_term",
+        "https://api.spotify.com/v1/me/top/artists?limit=20&time_range=short_term",
+    ]
+
+
 def test_fetch_top_artist_genres_http_error():
     def opener(request, timeout=None):
         raise HTTPError(request.full_url, 403, "Forbidden", hdrs=None, fp=BytesIO(b""))

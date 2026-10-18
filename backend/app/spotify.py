@@ -7,9 +7,11 @@ import urllib.request
 _MAX_GENRES = 20
 _MAX_GENRE_LEN = 80
 _SPOTIFY_PROVIDERS = frozenset({"oauth_spotify", "spotify"})
-TOP_ARTISTS_URL = (
-    "https://api.spotify.com/v1/me/top/artists?limit=20&time_range=medium_term"
-)
+_TIME_RANGES = ("medium_term", "short_term", "long_term")
+
+
+def _top_artists_url(time_range: str) -> str:
+    return f"https://api.spotify.com/v1/me/top/artists?limit=20&time_range={time_range}"
 
 
 class SpotifyImportError(Exception):
@@ -48,15 +50,25 @@ def suggestions_from_genres(genres: list[str]) -> dict:
 
 
 def fetch_top_artist_genres(access_token: str, opener=urllib.request.urlopen) -> list[str]:
-    """GET the caller's medium-term top artists and collect preference labels.
+    """GET the caller's top artists and collect preference labels.
 
+    Tries the last six months first, then the last month, then several years.
     Reads ``artists`` when present, otherwise Spotify's ``items`` array.
     Uses genre labels when Spotify sends them. When every genre list is empty,
     uses the artist names so a music taste still becomes a suggestion.
     Does not call audio-features, recommendations, or related-artists.
     """
+    for time_range in _TIME_RANGES:
+        payload = _read_top_artists(access_token, time_range, opener)
+        labels = _labels_from_artists(payload)
+        if labels:
+            return labels
+    return []
+
+
+def _read_top_artists(access_token: str, time_range: str, opener) -> dict:
     request = urllib.request.Request(
-        TOP_ARTISTS_URL,
+        _top_artists_url(time_range),
         headers={
             "Authorization": f"Bearer {access_token}",
             "Accept": "application/json",
@@ -83,11 +95,15 @@ def fetch_top_artist_genres(access_token: str, opener=urllib.request.urlopen) ->
         payload = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise SpotifyImportError("Spotify top artists response was not JSON") from exc
+    if not isinstance(payload, dict):
+        raise SpotifyImportError("Spotify top artists response was not JSON")
+    return payload
 
-    artists = _artist_list(payload)
+
+def _labels_from_artists(payload: dict) -> list[str]:
     genres: list[str] = []
     names: list[str] = []
-    for artist in artists:
+    for artist in _artist_list(payload):
         if not isinstance(artist, dict):
             continue
         name = artist.get("name")
@@ -95,7 +111,7 @@ def fetch_top_artist_genres(access_token: str, opener=urllib.request.urlopen) ->
             names.append(name.strip())
         values = artist.get("genres") or []
         if isinstance(values, list):
-            genres.extend(value for value in values if isinstance(value, str))
+            genres.extend(value for value in values if isinstance(value, str) and value.strip())
     return genres or names
 
 
