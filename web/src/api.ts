@@ -101,9 +101,7 @@ export type Plan = {
   status?: string
   host_id?: string
   member_count?: number
-  /** Preferred API field; some stubs may still send `joined`. */
   viewer_joined?: boolean
-  joined?: boolean
 }
 
 export type PlanInput = {

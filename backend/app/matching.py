@@ -1,10 +1,9 @@
 """Peer compatibility scoring.
 
-Port of ``compatibilityWith`` in ``web/src/sampleProfiles.ts``. Languages
-compare only to languages. Hobbies, locations, interests, and festivals are
-one preference pool: ``knows`` and ``wants_to_learn`` are combined before
-overlap, so an item counts once. Location, gathering size, and age bonuses
-are unchanged.
+Languages compare only to languages. Hobbies, locations, interests, and
+festivals are one preference pool: ``knows`` and ``wants_to_learn`` are
+combined before overlap, so an item counts once. Location, gathering size,
+and age add the remaining points.
 """
 
 from __future__ import annotations

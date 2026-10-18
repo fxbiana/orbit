@@ -47,51 +47,33 @@ export const GATHERING_SIZES = [
 
 export const PROFILE_FIELDS: {
   key: TopicKey
-  title: string
   knows: string
   wants: string
-  knowsHint: string
-  wantsHint: string
 }[] = [
   {
     key: "languages",
-    title: "Languages",
     knows: "Languages you speak",
     wants: "Languages you want to learn",
-    knowsHint: "Hindi, English",
-    wantsHint: "Punjabi",
   },
   {
     key: "locations",
-    title: "Places",
     knows: "Places you know",
     wants: "Places you want to learn about",
-    knowsHint: "Chandigarh",
-    wantsHint: "Seattle",
   },
   {
     key: "hobbies",
-    title: "Hobbies",
     knows: "Hobbies you do",
     wants: "Hobbies you want to try",
-    knowsHint: "Cooking",
-    wantsHint: "Tabla",
   },
   {
     key: "interests",
-    title: "Interests",
     knows: "Interests you have",
     wants: "Interests you want to explore",
-    knowsHint: "Classical music",
-    wantsHint: "Folk dance",
   },
   {
     key: "festivals",
-    title: "Festivals",
     knows: "Festivals you know",
     wants: "Festivals you want to learn about",
-    knowsHint: "Diwali",
-    wantsHint: "Holi",
   },
 ]
 

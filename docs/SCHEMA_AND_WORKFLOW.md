@@ -1,6 +1,6 @@
 # Schema & workflow brief (events, attendance, connections)
 
-Audience: SE implementing the next layers. Sources of truth: `AGENTS.md` (Product decisions locked), `backend/app/onboarding.py`, `backend/app/firebase.py`, ticket/onboarding routes, `web/src/sampleProfiles.ts` scoring.
+Audience: SE implementing the next layers. Sources of truth: `AGENTS.md` (Product decisions locked), `backend/app/onboarding.py`, `backend/app/firebase.py`, ticket/onboarding routes, `backend/app/matching.py`.
 
 **Status:** Onboarding, tickets, matches, **Open Plans**, contact links, and connections are implemented. Events / attendance / Spotify below remain **design only**. Do not break existing onboarding, tickets, matches, plans, contact, or connections.
 
@@ -109,7 +109,7 @@ One document per user. `PUT` creates or replaces (keeps `created_at`). `GET` 404
 | --- | --- | --- | --- |
 | GET | `/api/matches` | Clerk | Optional `limit` (default 10, max 50). 404 if caller has no onboarding. |
 
-Peers: `list_onboarding_peers` — collection-group scan on `profile` docs named `onboarding`, excludes caller. Response items: `user_id`, `username`, `first_name`, `location`, `age`, `gathering_size`, `compatibility_score`, `matched_on`. Scoring: `backend/app/matching.py` (port of `web/src/sampleProfiles.ts` `compatibilityWith`). Web `Matches.tsx` calls `listMatches` and shows that list. An empty list or an API error stays empty; it does not fall back to local samples.
+Peers: `list_onboarding_peers` — collection-group scan on `profile` docs named `onboarding`, excludes caller. Response items: `user_id`, `username`, `first_name`, `location`, `age`, `gathering_size`, `compatibility_score`, `matched_on`. Scoring: `backend/app/matching.py`. Web `Matches.tsx` calls `listMatches` and shows that list. An empty list or an API error stays empty; it does not fall back to local samples.
 
 ### Compatibility scoring (reference)
 
@@ -356,7 +356,7 @@ plans/{planId}/members/{userId}
 
 | Method | Path | Auth | Body / notes |
 | --- | --- | --- | --- |
-| GET | `/api/plans` | Clerk | Open plans, newest first (`status == open` + `order_by created_at`) |
+| GET | `/api/plans` | Clerk | Open plans, newest first (`status == open`, then sorted in the API) |
 | POST | `/api/plans` | Clerk | `{ title, activity_type, location_text, starts_at?, capacity? }` → 201 |
 | GET | `/api/plans/<plan_id>` | Clerk | Plan + members |
 | POST | `/api/plans/<plan_id>/join` | Clerk | 201 plan; 409 closed / full / already joined |
@@ -366,7 +366,7 @@ plans/{planId}/members/{userId}
 
 | Query | Approach |
 | --- | --- |
-| Open plans newest first | Composite: `status` ASC, `created_at` DESC — create in Firebase if the first list fails |
+| Open plans newest first | Equality on `status` only. The API sorts by `created_at`, so no composite index |
 | Members of plan | Subcollection list — no composite index |
 
 **Relation to events (Next)**
@@ -620,7 +620,7 @@ Style: blueprint under `backend/app/routes/`, `@bp.get|post|put|delete` then `@c
 
 - [ ] Read `AGENTS.md` → Product decisions (locked) + this doc + [`JAGMAN_FEASIBILITY.md`](JAGMAN_FEASIBILITY.md).
 - [ ] Run `seed_profiles.py`; confirm matches UI shows API source.
-- [ ] Smoke Open Plans (§3.5): create + join + list; add Firestore composite index if list query fails.
+- [ ] Smoke Open Plans (§3.5): create + join + list. The list query filters `status` and sorts in the API.
 - [ ] Leave `onboarding.py` validation and ticket fields unchanged.
 
 ### Events next (after demo path)
@@ -670,7 +670,7 @@ Resolve with product before coding edge cases; defaults suggested in italics.
 | Connections and messages | `backend/app/connections.py`, `backend/app/routes/connections.py` |
 | Reach UI | `web/src/Reach.tsx` |
 | Auth / `g.user_id` | `backend/app/auth.py` |
-| Sample scoring (client reference) | `web/src/sampleProfiles.ts` → `compatibilityWith` |
+| Sample scoring (extension popup) | `extension/src/popup/sampleProfiles.ts` → `compatibilityWith` |
 | Matches / plans client | `web/src/api.ts` → `listMatches`, `listPlans`, `createPlan`, `joinPlan` |
 | Plans UI | `web/src/Plans.tsx` |
 | Blueprint registration | `backend/app/__init__.py` |

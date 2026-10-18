@@ -13,7 +13,7 @@
 | Orbit-branded website | **Done** — wordmark/hero/onboarding copy say Orbit | Minor doc/README rename noise only |
 | Sign in, own a profile | Clerk + `GET/PUT /api/onboarding` + web flow | Env: Clerk keys |
 | Rank people by shared interests | `GET /api/matches` + `matching.py` **shipped**; web tries API then falls back to samples | Run `seed_profiles.py` or list looks empty → sample fallback |
-| Create / join an Open Plan | **API + web UI shipped** — `plans/*` routes, `Plans.tsx` create/list/join | Rehearse two accounts; confirm Firestore composite index for `status`+`created_at` |
+| Create / join an Open Plan | **API + web UI shipped** — `plans/*` routes, `Plans.tsx` create/list/join | Rehearse two accounts |
 | Compatibility among plan members | `GET /api/plans/<id>/matches` **shipped** | Optional in live script (P1) |
 | Capture a tab into Orbit | Tickets API + web `SavePage`; extension popup (Orbit-titled) can save when Clerk configured | Load unpacked extension once, or demo save from site |
 | Seeded peers | `seed_profiles.py` (100 people) | **Must run** before judges |
@@ -80,7 +80,7 @@ No second DB. No emulator. Extension never talks to Firestore.
 | Orbit web copy | **S** | **Done** | Low |
 | Matches API + tests | **M** | **Done** | Collection-group scan |
 | Wire matches UI + sample fallback | **S** | **Done** | Empty peers without seed |
-| Open Plans API + tests | **M** | **Done** | Composite index `status`+`created_at` |
+| Open Plans API + tests | **M** | **Done** | List filters `status` and sorts in the API |
 | Plans UI create/join | **S–M** | **Done** | Needs live API + auth |
 | Extension save tab | **M** | Code present; product = later | Clerk MV3 config |
 | Seed + rehearsal | **S** | Script ready; env-dependent | Creds blocker |
@@ -118,7 +118,7 @@ Code path for P0 is largely **already merged on this branch**. Remaining work is
 | Missing Clerk keys | No sign-in / 401s | Pre-check `web/.env` + root `.env` |
 | Missing Firebase credentials | Data routes 503 | Absolute `FIREBASE_CREDENTIALS_PATH` |
 | No seed | Matches fall back to samples | Always run `seed_profiles.py` |
-| Plans list query index | `status == open` + `order_by created_at` may need composite index | Create index from Firebase error link once |
+| Plans list query index | Resolved: `status == open`, then sort by `created_at` in the API | No composite index for the open-plans list |
 | Collection-group onboarding scan | Slow/empty/permissions | Seed first; `limit` capped at 50 |
 | Extension Clerk in MV3 | Auth friction | Fallback: website `SavePage` |
 | Scope creep (Ticketmaster/friends/Spotify) | Miss demo polish | Hard P2 cut |
