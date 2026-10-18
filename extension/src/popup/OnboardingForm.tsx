@@ -118,12 +118,13 @@ export function OnboardingForm({
 
     setError(null)
     setSaveError(null)
-    setPhase("people")
+    // Save before opening the people phase so a later API match load can see the profile.
     try {
       await saveOnboarding(await sessionToken(getToken), input)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Save failed")
     }
+    setPhase("people")
   }
 
   if (phase === "people") {
