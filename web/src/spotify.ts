@@ -3,12 +3,36 @@ import { sessionToken } from "./api"
 const apiBase = () =>
   (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "")
 
+export type SpotifyArtist = {
+  name: string
+  imageUrl: string | null
+}
+
 export type SpotifyImport = {
   genres: string[]
+  artists: SpotifyArtist[]
   suggestions: {
     knows: string[]
     wants_to_learn: string[]
   }
+}
+
+function artists(value: unknown): SpotifyArtist[] {
+  if (!Array.isArray(value)) return []
+  const portraits: SpotifyArtist[] = []
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue
+    const record = item as Record<string, unknown>
+    if (typeof record.name !== "string") continue
+    const name = record.name.trim()
+    if (!name) continue
+    const image = record.image_url
+    portraits.push({
+      name,
+      imageUrl: typeof image === "string" && image.startsWith("https://") ? image : null,
+    })
+  }
+  return portraits
 }
 
 function strings(value: unknown): string[] {
@@ -50,6 +74,7 @@ export async function importSpotify(getToken: () => Promise<string | null>): Pro
   const suggestion = suggestions as Record<string, unknown>
   return {
     genres: strings(record.genres),
+    artists: artists(record.artists),
     suggestions: {
       knows: strings(suggestion.knows),
       wants_to_learn: strings(suggestion.wants_to_learn),

@@ -4,7 +4,8 @@ from app.auth import caller_required
 from app.firebase import save_spotify_snapshot
 from app.spotify import (
     SpotifyImportError,
-    fetch_top_artist_genres,
+    fetch_spotify_taste,
+    portrait_artists,
     normalize_genres,
     spotify_access_token,
     suggestions_from_genres,
@@ -21,15 +22,16 @@ def import_spotify():
     if not token:
         abort(404, description="Connect Spotify before importing preferences")
     try:
-        raw_genres = fetch_top_artist_genres(token)
+        taste = fetch_spotify_taste(token)
     except SpotifyImportError as exc:
         abort(502, description=str(exc))
 
-    genres = normalize_genres(raw_genres)
+    genres = normalize_genres(taste["labels"])
     save_spotify_snapshot(g.user_id, genres)
     return jsonify(
         {
             "genres": genres,
+            "artists": portrait_artists(taste["artists"]),
             "suggestions": suggestions_from_genres(genres),
         }
     )

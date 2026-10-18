@@ -105,7 +105,7 @@ it("opens the saved profile and lists people from the match API", async () => {
   expect(screen.getByRole("button", { name: "Ask to connect" })).toBeInTheDocument()
 })
 
-it("asks about you first, then reach, then preferences", async () => {
+it("starts with Spotify, then you, reach, and preferences", async () => {
   vi.mocked(getOnboarding).mockResolvedValue(saved)
   vi.mocked(getContact).mockResolvedValue(
     contact({
@@ -118,16 +118,20 @@ it("asks about you first, then reach, then preferences", async () => {
 
   expect(await screen.findByRole("dialog", { name: "Contact ways" })).toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "Edit profile" }))
+  expect(screen.getByRole("heading", { name: "Start from Spotify" })).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Connect Spotify" })).toBeInTheDocument()
+  expect(screen.getByText("Step 1 of 4")).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Next" }))
+
   expect(screen.getByRole("heading", { name: "About you" })).toBeInTheDocument()
-  expect(screen.getByText("Step 1 of 3")).toBeInTheDocument()
+  expect(screen.getByText("Step 2 of 4")).toBeInTheDocument()
   expect(screen.getByText(/does not pull your name or city/)).toBeInTheDocument()
-  expect(screen.getByLabelText("City")).toHaveValue("Seattle")
+  expect(screen.getByRole("button", { name: "Seattle", pressed: true })).toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
 
   expect(screen.getByRole("heading", { name: "How you want to be reached" })).toBeInTheDocument()
-  expect(screen.getByText("Step 2 of 3")).toBeInTheDocument()
+  expect(screen.getByText("Step 3 of 4")).toBeInTheDocument()
   expect(screen.getByText(/Usernames are optional/)).toBeInTheDocument()
-  expect(screen.getByText(/Spotify and Meta suggestions come next/)).toBeInTheDocument()
 
   const instagram = screen.getByRole("textbox", { name: "Instagram" })
   expect(instagram).toHaveValue("priya.learns")
@@ -135,7 +139,7 @@ it("asks about you first, then reach, then preferences", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
 
   expect(screen.getByRole("heading", { name: "Your preferences" })).toBeInTheDocument()
-  expect(screen.getByText("Step 3 of 3")).toBeInTheDocument()
+  expect(screen.getByText("Step 4 of 4")).toBeInTheDocument()
   expect(screen.getByLabelText("Languages you speak")).toHaveValue("English")
   expect(screen.getByLabelText("Preferences you already have")).toHaveValue("Cooking, Seattle, Diwali")
   expect(screen.getByLabelText("Preferences you want")).toHaveValue("Dance")
@@ -179,10 +183,11 @@ it("leaves the match list empty when the API has no other profiles", async () =>
 })
 
 function fillAbout() {
+  fireEvent.click(screen.getByRole("button", { name: "Next" }))
   fireEvent.change(screen.getByLabelText("User name"), { target: { value: "priya" } })
   fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Priya" } })
   fireEvent.change(screen.getByLabelText("Age"), { target: { value: "27" } })
-  fireEvent.change(screen.getByLabelText("City"), { target: { value: "Portland" } })
+  fireEvent.click(screen.getByRole("button", { name: "Portland" }))
   fireEvent.click(screen.getByRole("radio", { name: "6-15 people" }))
 }
 
@@ -190,13 +195,17 @@ it("starts a blank form when this account has no profile", async () => {
   vi.mocked(getOnboarding).mockResolvedValue(null)
   render(<OnboardingForm getToken={async () => "session-token"} />)
 
-  expect(await screen.findByRole("heading", { name: "About you" })).toBeInTheDocument()
-  expect(screen.getByText("Step 1 of 3")).toBeInTheDocument()
+  expect(await screen.findByRole("heading", { name: "Start from Spotify" })).toBeInTheDocument()
+  expect(screen.getByText("Step 1 of 4")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Connect Spotify" })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Next" }))
+  expect(screen.getByRole("heading", { name: "About you" })).toBeInTheDocument()
   expect(screen.getByText(/does not pull your name or city/)).toBeInTheDocument()
   expect(screen.getByLabelText("User name")).toHaveValue("")
   expect(screen.getByLabelText("First name")).toHaveValue("")
   expect(screen.getByLabelText("Age")).toHaveValue(null)
-  expect(screen.getByLabelText("City")).toHaveValue("")
+  expect(screen.getByText("Tap a city on the map.")).toBeInTheDocument()
+  expect(screen.queryByRole("button", { pressed: true })).not.toBeInTheDocument()
   fireEvent.change(screen.getByLabelText("User name"), { target: { value: "priya" } })
   fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Priya" } })
   fireEvent.change(screen.getByLabelText("Age"), { target: { value: "27" } })
@@ -205,7 +214,7 @@ it("starts a blank form when this account has no profile", async () => {
   expect(screen.getByRole("heading", { name: "About you" })).toBeInTheDocument()
   expect(screen.getByText("Choose a city.")).toBeInTheDocument()
 
-  fireEvent.change(screen.getByLabelText("City"), { target: { value: "Portland" } })
+  fireEvent.click(screen.getByRole("button", { name: "Portland" }))
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
   expect(screen.getByRole("heading", { name: "How you want to be reached" })).toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
@@ -230,18 +239,27 @@ it("merges Spotify suggestions into grouped preferences and leaves about fields 
   )
   render(<OnboardingForm getToken={async () => "session-token"} />)
 
-  expect(await screen.findByRole("heading", { name: "About you" })).toBeInTheDocument()
+  expect(await screen.findByRole("heading", { name: "Start from Spotify" })).toBeInTheDocument()
   fillAbout()
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
   fireEvent.change(screen.getByLabelText("Preferences you already have"), {
     target: { value: "Cooking, Diwali" },
   })
+  fireEvent.click(screen.getByRole("button", { name: "Back" }))
+  fireEvent.click(screen.getByRole("button", { name: "Back" }))
+  fireEvent.click(screen.getByRole("button", { name: "Back" }))
   fireEvent.click(screen.getByRole("button", { name: "Suggest from Spotify" }))
 
   expect(await screen.findByText("Spotify suggested: jazz, indie")).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Next" }))
+  fireEvent.click(screen.getByRole("button", { name: "Next" }))
+  fireEvent.click(screen.getByRole("button", { name: "Next" }))
   expect(screen.getByLabelText("Preferences you already have")).toHaveValue("Cooking, Diwali, Jazz")
   expect(screen.getByLabelText("Preferences you want")).toHaveValue("Tabla")
+  fireEvent.click(screen.getByRole("button", { name: "Back" }))
+  fireEvent.click(screen.getByRole("button", { name: "Back" }))
+  fireEvent.click(screen.getByRole("button", { name: "Back" }))
   expect(screen.getByRole("button", { name: "Suggest from Spotify" })).toBeInTheDocument()
   expect(fetch).toHaveBeenCalledWith(
     "http://localhost:5000/api/spotify/import",
@@ -251,11 +269,10 @@ it("merges Spotify suggestions into grouped preferences and leaves about fields 
     }),
   )
 
-  fireEvent.click(screen.getByRole("button", { name: "Back" }))
-  fireEvent.click(screen.getByRole("button", { name: "Back" }))
+  fireEvent.click(screen.getByRole("button", { name: "Next" }))
   expect(screen.getByLabelText("User name")).toHaveValue("priya")
   expect(screen.getByLabelText("First name")).toHaveValue("Priya")
-  expect(screen.getByLabelText("City")).toHaveValue("Portland")
+  expect(screen.getByRole("button", { name: "Portland", pressed: true })).toBeInTheDocument()
   expect(screen.getByLabelText("Age")).toHaveValue(27)
 })
 
@@ -267,22 +284,34 @@ it("keeps a comma inside a Spotify artist name", async () => {
       ok: true,
       json: async () => ({
         genres: ["Tyler, The Creator", "Steve Lacy"],
+        artists: [
+          { name: "Tyler, The Creator", image_url: "https://i.scdn.co/image/tyler" },
+          { name: "Steve Lacy", image_url: "https://i.scdn.co/image/steve" },
+        ],
         suggestions: { knows: ["Tyler, The Creator", "Steve Lacy"], wants_to_learn: [] },
       }),
     })),
   )
   render(<OnboardingForm getToken={async () => "session-token"} />)
 
-  expect(await screen.findByRole("heading", { name: "About you" })).toBeInTheDocument()
+  expect(await screen.findByRole("heading", { name: "Start from Spotify" })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Suggest from Spotify" }))
+  expect(await screen.findByText("Your top artists")).toBeInTheDocument()
+  expect(screen.getByText("Tyler, The Creator")).toBeInTheDocument()
+  expect(screen.getByText("Steve Lacy")).toBeInTheDocument()
+  const portraits = document.querySelectorAll(".artist-grid img")
+  expect(Array.from(portraits).map((img) => img.getAttribute("src"))).toEqual([
+    "https://i.scdn.co/image/tyler",
+    "https://i.scdn.co/image/steve",
+  ])
+  expect(screen.queryByText(/Spotify suggested:/)).not.toBeInTheDocument()
   fillAbout()
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
   fireEvent.click(screen.getByRole("button", { name: "Basketball" }))
-  fireEvent.click(screen.getByRole("button", { name: "Suggest from Spotify" }))
 
-  expect(await screen.findByText("Spotify suggested: Tyler, The Creator, Steve Lacy")).toBeInTheDocument()
   expect(screen.getByLabelText("Preferences you already have")).toHaveValue(
-    "Basketball, Tyler, The Creator, Steve Lacy",
+    "Tyler, The Creator, Steve Lacy, Basketball",
   )
   fireEvent.click(screen.getByRole("button", { name: "Find your people" }))
   expect(await screen.findByRole("heading", { name: "Priya, people near you" })).toBeInTheDocument()
@@ -290,7 +319,7 @@ it("keeps a comma inside a Spotify artist name", async () => {
     "session-token",
     expect.objectContaining({
       interests: {
-        knows: ["Basketball", "Tyler, The Creator", "Steve Lacy"],
+        knows: ["Tyler, The Creator", "Steve Lacy", "Basketball"],
         wants_to_learn: [],
       },
     }),
@@ -309,16 +338,22 @@ it("keeps typed preferences when Spotify import fails", async () => {
   )
   render(<OnboardingForm getToken={async () => "session-token"} />)
 
-  expect(await screen.findByRole("heading", { name: "About you" })).toBeInTheDocument()
+  expect(await screen.findByRole("heading", { name: "Start from Spotify" })).toBeInTheDocument()
   fillAbout()
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
   fireEvent.change(screen.getByLabelText("Preferences you already have"), {
     target: { value: "Cooking" },
   })
+  fireEvent.click(screen.getByRole("button", { name: "Back" }))
+  fireEvent.click(screen.getByRole("button", { name: "Back" }))
+  fireEvent.click(screen.getByRole("button", { name: "Back" }))
   fireEvent.click(screen.getByRole("button", { name: "Suggest from Spotify" }))
 
   expect(await screen.findByText("Connect Spotify first")).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Next" }))
+  fireEvent.click(screen.getByRole("button", { name: "Next" }))
+  fireEvent.click(screen.getByRole("button", { name: "Next" }))
   expect(screen.getByLabelText("Preferences you already have")).toHaveValue("Cooking")
   expect(screen.getByLabelText("Preferences you already have")).toBeEnabled()
 })
