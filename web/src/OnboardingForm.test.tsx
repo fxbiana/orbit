@@ -1,7 +1,7 @@
-import { render, screen } from "@testing-library/react"
+import { fireEvent, render, screen } from "@testing-library/react"
 import { beforeEach, expect, it, vi } from "vitest"
 import { OnboardingForm } from "./OnboardingForm"
-import { getOnboarding, listMatches } from "./api"
+import { getContact, getOnboarding, listMatches, saveContact } from "./api"
 import type { OnboardingProfile } from "./onboarding"
 
 vi.mock("./api", () => ({
@@ -52,6 +52,16 @@ const saved: OnboardingProfile = {
 
 beforeEach(() => {
   vi.mocked(getOnboarding).mockReset()
+  vi.mocked(getContact).mockReset()
+  vi.mocked(saveContact).mockReset()
+  vi.mocked(getContact).mockResolvedValue({
+    instagram: "",
+    discord: "",
+    snapchat: "",
+    preferred: "",
+    reach_note: "",
+    updated_at: null,
+  })
   vi.mocked(listMatches).mockReset()
   vi.mocked(listMatches).mockResolvedValue({ matches: [] })
 })
@@ -77,9 +87,46 @@ it("opens the saved profile and lists people from the match API", async () => {
   expect(await screen.findByRole("heading", { name: "Ada" })).toBeInTheDocument()
   expect(screen.getByRole("heading", { name: "Priya, people near you" })).toBeInTheDocument()
   expect(screen.queryByText("Showing sample people")).not.toBeInTheDocument()
-  expect(screen.getByRole("button", { name: "Edit answers" })).toBeInTheDocument()
+  expect(screen.getByRole("heading", { name: "Profile" })).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Edit profile" })).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Ask to connect" })).toBeInTheDocument()
   expect(await screen.findByRole("heading", { name: "How you want to be reached" })).toBeInTheDocument()
+})
+
+it("asks how to be reached as the last onboarding step and again from the profile", async () => {
+  vi.mocked(getOnboarding).mockResolvedValue(saved)
+  vi.mocked(getContact).mockResolvedValue({
+    instagram: "priya.learns",
+    discord: "",
+    snapchat: "",
+    preferred: "instagram",
+    reach_note: "Evenings",
+    updated_at: null,
+  })
+  render(<OnboardingForm getToken={async () => "session-token"} />)
+
+  fireEvent.click(await screen.findByRole("button", { name: "Edit profile" }))
+  expect(screen.getByRole("heading", { name: "Who you are" })).toBeInTheDocument()
+  expect(screen.getByText("Step 1 of 9")).toBeInTheDocument()
+
+  for (let step = 0; step < 8; step += 1) {
+    fireEvent.click(screen.getByRole("button", { name: "Next" }))
+  }
+
+  expect(screen.getByRole("heading", { name: "How you want to be reached" })).toBeInTheDocument()
+  const instagram = screen.getByRole("textbox", { name: "Instagram" })
+  expect(instagram).toHaveValue("priya.learns")
+  fireEvent.change(instagram, { target: { value: "priya.new" } })
+  fireEvent.click(screen.getByRole("button", { name: "Find your people" }))
+
+  expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument()
+  expect(saveContact).toHaveBeenCalledWith("session-token", {
+    instagram: "priya.new",
+    discord: "",
+    snapchat: "",
+    preferred: "instagram",
+    reach_note: "Evenings",
+  })
 })
 
 it("leaves the match list empty when the API has no other profiles", async () => {
@@ -98,6 +145,7 @@ it("starts a blank form when this account has no profile", async () => {
   render(<OnboardingForm getToken={async () => "session-token"} />)
 
   expect(await screen.findByRole("heading", { name: "Who you are" })).toBeInTheDocument()
+  expect(screen.getByText("Step 1 of 9")).toBeInTheDocument()
   expect(screen.getByLabelText("User name")).toHaveValue("")
   expect(screen.getByLabelText("First name")).toHaveValue("")
   expect(screen.getByLabelText("Age")).toHaveValue(null)

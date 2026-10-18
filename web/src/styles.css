@@ -306,6 +306,7 @@ input[type="radio"] {
 }
 
 .onboarding input:not([type="radio"]),
+.onboarding textarea,
 .save-form input,
 .plan-form input,
 .plan-form select,
@@ -409,6 +410,18 @@ input[type="radio"] {
   margin-top: 16px;
 }
 
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.pager p {
+  margin: 0;
+}
+
 .people {
   list-style: none;
   margin: 8px 0 0;
@@ -479,6 +492,7 @@ h3 {
   margin-top: 8px;
 }
 
+.profile,
 .reach {
   margin-top: 32px;
   padding-top: 8px;

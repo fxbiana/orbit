@@ -17,7 +17,7 @@ import {
 
 export type LinkStatus = "out" | "in" | "accepted"
 
-type ContactDraft = {
+export type ContactDraft = {
   instagram: string
   discord: string
   snapchat: string
@@ -60,7 +60,23 @@ function username(value: string): string {
   return value.trim().replace(/^@+/, "")
 }
 
-function draftProblem(draft: ContactDraft): string | null {
+function handleProblem(label: string, value: string, pattern: RegExp): string | null {
+  const text = username(value)
+  if (!text) return null
+  if (text.includes("/") || text.includes(":") || /\s/.test(text)) {
+    return `${label} must be a username, not a link.`
+  }
+  if (!pattern.test(text)) return `${label} username is not valid.`
+  return null
+}
+
+export function contactProblem(draft: ContactDraft): string | null {
+  const instagram = handleProblem("Instagram", draft.instagram, HANDLE.instagram)
+  if (instagram) return instagram
+  const discord = handleProblem("Discord", draft.discord, HANDLE.discord)
+  if (discord) return discord
+  const snapchat = handleProblem("Snapchat", draft.snapchat, HANDLE.snapchat)
+  if (snapchat) return snapchat
   if (draft.preferred === "instagram" && !username(draft.instagram)) {
     return "Add an Instagram username to prefer it."
   }
@@ -72,6 +88,124 @@ function draftProblem(draft: ContactDraft): string | null {
   }
   if (draft.reach_note.trim().length > 160) return "Keep the note to 160 characters."
   return null
+}
+
+export function contactToSave(draft: ContactDraft) {
+  return {
+    instagram: username(draft.instagram),
+    discord: username(draft.discord),
+    snapchat: username(draft.snapchat),
+    preferred: draft.preferred,
+    reach_note: draft.reach_note.trim(),
+  }
+}
+
+export function ReachFields({
+  draft,
+  onChange,
+}: {
+  draft: ContactDraft
+  onChange: (next: ContactDraft) => void
+}) {
+  return (
+    <>
+      <label htmlFor="instagram">
+        Instagram
+        <input
+          id="instagram"
+          value={draft.instagram}
+          autoComplete="off"
+          placeholder="amira.learns"
+          onChange={(event) => onChange({ ...draft, instagram: event.target.value })}
+        />
+      </label>
+      <label htmlFor="discord">
+        Discord
+        <input
+          id="discord"
+          value={draft.discord}
+          autoComplete="off"
+          placeholder="amira"
+          onChange={(event) => onChange({ ...draft, discord: event.target.value })}
+        />
+      </label>
+      <label htmlFor="snapchat">
+        Snapchat
+        <input
+          id="snapchat"
+          value={draft.snapchat}
+          autoComplete="off"
+          placeholder="amira"
+          onChange={(event) => onChange({ ...draft, snapchat: event.target.value })}
+        />
+      </label>
+      <p className="meta">Usernames only. A link is not saved.</p>
+      <fieldset className="choices">
+        <legend>Where you actually answer</legend>
+        <label className="choice">
+          <input
+            type="radio"
+            name="preferred"
+            value=""
+            checked={draft.preferred === ""}
+            onChange={() => onChange({ ...draft, preferred: "" })}
+          />
+          No preference
+        </label>
+        <label className="choice">
+          <input
+            type="radio"
+            name="preferred"
+            value="orbit"
+            checked={draft.preferred === "orbit"}
+            onChange={() => onChange({ ...draft, preferred: "orbit" })}
+          />
+          Messages on Orbit
+        </label>
+        <label className="choice">
+          <input
+            type="radio"
+            name="preferred"
+            value="instagram"
+            checked={draft.preferred === "instagram"}
+            onChange={() => onChange({ ...draft, preferred: "instagram" })}
+          />
+          Instagram
+        </label>
+        <label className="choice">
+          <input
+            type="radio"
+            name="preferred"
+            value="discord"
+            checked={draft.preferred === "discord"}
+            onChange={() => onChange({ ...draft, preferred: "discord" })}
+          />
+          Discord
+        </label>
+        <label className="choice">
+          <input
+            type="radio"
+            name="preferred"
+            value="snapchat"
+            checked={draft.preferred === "snapchat"}
+            onChange={() => onChange({ ...draft, preferred: "snapchat" })}
+          />
+          Snapchat
+        </label>
+      </fieldset>
+      <label htmlFor="reach-note">
+        When you usually reply
+        <textarea
+          id="reach-note"
+          rows={2}
+          maxLength={160}
+          value={draft.reach_note}
+          placeholder="I check Discord in the evening."
+          onChange={(event) => onChange({ ...draft, reach_note: event.target.value })}
+        />
+      </label>
+    </>
+  )
 }
 
 function personName(connection: Connection): string {
@@ -234,6 +368,65 @@ function FriendCard({
   )
 }
 
+export function ContactForm({ getToken }: { getToken: () => Promise<string | null> }) {
+  const [draft, setDraft] = useState<ContactDraft>(EMPTY_DRAFT)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    sessionToken(getToken)
+      .then((token) => getContact(token))
+      .then((contact) => {
+        if (!cancelled) setDraft(draftFrom(contact))
+      })
+      .catch(() => {
+        if (!cancelled) setSaveError("Could not load how to reach you.")
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [getToken])
+
+  async function onSave(event: FormEvent) {
+    event.preventDefault()
+    const problem = contactProblem(draft)
+    if (problem) {
+      setSaveError(problem)
+      setSaved(false)
+      return
+    }
+    setSaving(true)
+    setSaveError(null)
+    setSaved(false)
+    try {
+      const stored = await saveContact(await sessionToken(getToken), contactToSave(draft))
+      setDraft(draftFrom(stored))
+      setSaved(true)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Could not save how to reach you.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form className="reach-form" onSubmit={onSave}>
+      <h3>How you want to be reached</h3>
+      <ReachFields draft={draft} onChange={setDraft} />
+      {saveError ? <p className="error">{saveError}</p> : null}
+      {saved ? <p className="note">Saved. People see this after you both accept.</p> : null}
+      <div className="actions">
+        <span />
+        <button type="submit" disabled={saving}>
+          {saving ? "Saving…" : "Save reach info"}
+        </button>
+      </div>
+    </form>
+  )
+}
+
 export function Reach({
   getToken,
   refreshKey = 0,
@@ -243,27 +436,21 @@ export function Reach({
   refreshKey?: number
   onLinks?: (links: Record<string, LinkStatus>) => void
 }) {
-  const [draft, setDraft] = useState<ContactDraft>(EMPTY_DRAFT)
   const [inbox, setInbox] = useState<Connection[]>([])
   const [outbox, setOutbox] = useState<Connection[]>([])
   const [friends, setFriends] = useState<Connection[]>([])
   const [available, setAvailable] = useState(true)
   const [loading, setLoading] = useState(true)
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
-  const [saving, setSaving] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
 
   async function reload() {
     const token = await sessionToken(getToken)
-    const [contact, incoming, outgoing, accepted] = await Promise.all([
-      getContact(token),
+    const [incoming, outgoing, accepted] = await Promise.all([
       listConnections(token, "inbox"),
       listConnections(token, "outbox"),
       listConnections(token, "friends"),
     ])
-    setDraft(draftFrom(contact))
     setInbox(incoming.connections ?? [])
     setOutbox(outgoing.connections ?? [])
     setFriends(accepted.connections ?? [])
@@ -294,28 +481,6 @@ export function Reach({
     onLinks(links)
   }, [inbox, outbox, friends, onLinks])
 
-  async function onSave(event: FormEvent) {
-    event.preventDefault()
-    const problem = draftProblem(draft)
-    if (problem) {
-      setSaveError(problem)
-      setSaved(false)
-      return
-    }
-    setSaving(true)
-    setSaveError(null)
-    setSaved(false)
-    try {
-      const stored = await saveContact(await sessionToken(getToken), draft)
-      setDraft(draftFrom(stored))
-      setSaved(true)
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Could not save how to reach you.")
-    } finally {
-      setSaving(false)
-    }
-  }
-
   async function respond(connectionId: string, action: "accept" | "reject") {
     setBusyId(connectionId)
     setActionError(null)
@@ -342,114 +507,6 @@ export function Reach({
       </p>
       {loading ? <p className="note">Loading reach…</p> : null}
       {!available ? <p className="note">Reach needs the API. Your links stay off the match list.</p> : null}
-      {available ? (
-        <form className="reach-form" onSubmit={onSave}>
-          <h3>How you want to be reached</h3>
-          <label htmlFor="instagram">
-            Instagram
-            <input
-              id="instagram"
-              value={draft.instagram}
-              autoComplete="off"
-              placeholder="amira.learns"
-              onChange={(event) => setDraft((current) => ({ ...current, instagram: event.target.value }))}
-            />
-          </label>
-          <label htmlFor="discord">
-            Discord
-            <input
-              id="discord"
-              value={draft.discord}
-              autoComplete="off"
-              placeholder="amira"
-              onChange={(event) => setDraft((current) => ({ ...current, discord: event.target.value }))}
-            />
-          </label>
-          <label htmlFor="snapchat">
-            Snapchat
-            <input
-              id="snapchat"
-              value={draft.snapchat}
-              autoComplete="off"
-              placeholder="amira"
-              onChange={(event) => setDraft((current) => ({ ...current, snapchat: event.target.value }))}
-            />
-          </label>
-          <p className="meta">Usernames only. A link is not saved.</p>
-          <fieldset className="choices">
-            <legend>Where you actually answer</legend>
-            <label className="choice">
-              <input
-                type="radio"
-                name="preferred"
-                value=""
-                checked={draft.preferred === ""}
-                onChange={() => setDraft((current) => ({ ...current, preferred: "" }))}
-              />
-              No preference
-            </label>
-            <label className="choice">
-              <input
-                type="radio"
-                name="preferred"
-                value="orbit"
-                checked={draft.preferred === "orbit"}
-                onChange={() => setDraft((current) => ({ ...current, preferred: "orbit" }))}
-              />
-              Messages on Orbit
-            </label>
-            <label className="choice">
-              <input
-                type="radio"
-                name="preferred"
-                value="instagram"
-                checked={draft.preferred === "instagram"}
-                onChange={() => setDraft((current) => ({ ...current, preferred: "instagram" }))}
-              />
-              Instagram
-            </label>
-            <label className="choice">
-              <input
-                type="radio"
-                name="preferred"
-                value="discord"
-                checked={draft.preferred === "discord"}
-                onChange={() => setDraft((current) => ({ ...current, preferred: "discord" }))}
-              />
-              Discord
-            </label>
-            <label className="choice">
-              <input
-                type="radio"
-                name="preferred"
-                value="snapchat"
-                checked={draft.preferred === "snapchat"}
-                onChange={() => setDraft((current) => ({ ...current, preferred: "snapchat" }))}
-              />
-              Snapchat
-            </label>
-          </fieldset>
-          <label htmlFor="reach-note">
-            When you usually reply
-            <textarea
-              id="reach-note"
-              rows={2}
-              maxLength={160}
-              value={draft.reach_note}
-              placeholder="I check Discord in the evening."
-              onChange={(event) => setDraft((current) => ({ ...current, reach_note: event.target.value }))}
-            />
-          </label>
-          {saveError ? <p className="error">{saveError}</p> : null}
-          {saved ? <p className="note">Saved. People see this after you both accept.</p> : null}
-          <div className="actions">
-            <span />
-            <button type="submit" disabled={saving}>
-              {saving ? "Saving…" : "Save reach info"}
-            </button>
-          </div>
-        </form>
-      ) : null}
 
       {available && !loading ? (
         <>

@@ -1,8 +1,16 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from "react"
-import { getOnboarding, saveOnboarding, sessionToken } from "./api"
+import { getContact, getOnboarding, saveContact, saveOnboarding, sessionToken } from "./api"
 import { Matches } from "./Matches"
 import { Plans } from "./Plans"
-import { Reach, type LinkStatus } from "./Reach"
+import {
+  ContactForm,
+  Reach,
+  ReachFields,
+  contactProblem,
+  contactToSave,
+  type ContactDraft,
+  type LinkStatus,
+} from "./Reach"
 import {
   FLOW_STEPS,
   GATHERING_SIZES,
@@ -27,6 +35,14 @@ type Draft = {
   age: string
   gatheringSize: string
   topics: Record<TopicKey, TopicDraft>
+}
+
+const EMPTY_CONTACT: ContactDraft = {
+  instagram: "",
+  discord: "",
+  snapchat: "",
+  preferred: "",
+  reach_note: "",
 }
 
 function emptyDraft(): Draft {
@@ -89,6 +105,7 @@ export function OnboardingForm({
   extras?: ReactNode
 }) {
   const [draft, setDraft] = useState<Draft>(emptyDraft)
+  const [contact, setContact] = useState<ContactDraft>(EMPTY_CONTACT)
   const [stepIndex, setStepIndex] = useState(0)
   const [phase, setPhase] = useState<"pages" | "people">("pages")
   const [viewer, setViewer] = useState<OnboardingInput | null>(null)
@@ -105,9 +122,25 @@ export function OnboardingForm({
     let cancelled = false
     setLoaded(false)
     sessionToken(getToken)
-      .then((token) => getOnboarding(token))
-      .then((profile) => {
-        if (cancelled || !profile) return
+      .then(async (token) => {
+        const [profile, storedContact] = await Promise.all([
+          getOnboarding(token),
+          getContact(token).catch(() => null),
+        ])
+        return { profile, storedContact }
+      })
+      .then(({ profile, storedContact }) => {
+        if (cancelled) return
+        if (storedContact) {
+          setContact({
+            instagram: storedContact.instagram,
+            discord: storedContact.discord,
+            snapchat: storedContact.snapchat,
+            preferred: storedContact.preferred,
+            reach_note: storedContact.reach_note,
+          })
+        }
+        if (!profile) return
         setDraft(draftFromProfile(profile))
         setViewer(profile)
         setPhase("people")
@@ -141,6 +174,7 @@ export function OnboardingForm({
   }
 
   function problemFor(id: FlowStepId): string | null {
+    if (id === "reach") return contactProblem(contact)
     return validateFlowStep(id, toInput(draft))
   }
 
@@ -164,14 +198,22 @@ export function OnboardingForm({
       return
     }
 
+    const reachProblem = contactProblem(contact)
+    if (reachProblem) {
+      setError(reachProblem)
+      return
+    }
+
     setError(null)
     setSaveError(null)
-    setViewer(input)
-    setPhase("people")
     try {
-      await saveOnboarding(await sessionToken(getToken), input)
+      const token = await sessionToken(getToken)
+      await saveOnboarding(token, input)
+      await saveContact(token, contactToSave(contact))
+      setViewer(input)
+      setPhase("people")
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Save failed")
+      setError(err instanceof Error ? err.message : "Save failed")
     }
   }
 
@@ -184,21 +226,29 @@ export function OnboardingForm({
           links={links}
           onConnected={() => setReachKey((key) => key + 1)}
         />
+        <section className="profile" id="profile">
+          <h2>Profile</h2>
+          <p className="note">
+            Update how people reach you. Connected people can see this. Your other answers stay
+            under Edit profile.
+          </p>
+          <ContactForm getToken={getToken} />
+          {saveError ? <p className="error">Profile was not saved. {saveError}</p> : null}
+          <div className="actions">
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => {
+                setStepIndex(0)
+                setPhase("pages")
+              }}
+            >
+              Edit profile
+            </button>
+          </div>
+        </section>
         <Reach getToken={getToken} refreshKey={reachKey} onLinks={onLinks} />
         <Plans getToken={getToken} />
-        {saveError ? <p className="error">Profile was not saved. {saveError}</p> : null}
-        <div className="actions">
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => {
-              setStepIndex(0)
-              setPhase("pages")
-            }}
-          >
-            Edit answers
-          </button>
-        </div>
         {extras ? (
           <details className="tickets">
             <summary>Saved pages</summary>
@@ -231,6 +281,12 @@ export function OnboardingForm({
         </p>
       ) : null}
       {topic ? <p className="note">Separate items with commas.</p> : null}
+      {step.id === "reach" ? (
+        <p className="note">
+          Optional. Usernames only. Connected people can see this, and you can change it later from
+          your profile.
+        </p>
+      ) : null}
 
       {step.id === "you" ? (
         <>
@@ -300,6 +356,8 @@ export function OnboardingForm({
           ))}
         </fieldset>
       ) : null}
+
+      {step.id === "reach" ? <ReachFields draft={contact} onChange={setContact} /> : null}
 
       {topic ? (
         <>

@@ -100,9 +100,10 @@ export const FLOW_STEPS: { id: FlowStepId; title: string }[] = [
   { id: "where", title: "Where you land" },
   { id: "gathering", title: "How you gather" },
   ...PROFILE_FIELDS.map((field) => ({ id: field.key, title: field.title })),
+  { id: "reach", title: "How you want to be reached" },
 ]
 
-export type FlowStepId = "you" | "where" | "gathering" | TopicKey
+export type FlowStepId = "you" | "where" | "gathering" | TopicKey | "reach"
 
 export function cleanText(value: string): string {
   return value.trim().replace(/\s+/g, " ")
@@ -201,6 +202,8 @@ export function validateFlowStep(step: FlowStepId, input: OnboardingInput): stri
     }
     return null
   }
+
+  if (step === "reach") return null
 
   const field = PROFILE_FIELDS.find((item) => item.key === step)
   if (!field) return null

@@ -159,7 +159,8 @@ function PersonRow({
   )
 }
 
-const TOP_MATCHES = 10
+const PAGE_SIZE = 4
+const FETCH_LIMIT = 50
 
 export function Matches({
   viewer,
@@ -173,6 +174,7 @@ export function Matches({
   onConnected?: () => void
 }) {
   const [people, setPeople] = useState<MatchPerson[]>([])
+  const [page, setPage] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -181,10 +183,11 @@ export function Matches({
     setLoading(true)
     setError(null)
     sessionToken(getToken)
-      .then((token) => listMatches(token, TOP_MATCHES))
+      .then((token) => listMatches(token, FETCH_LIMIT))
       .then((body) => {
         if (cancelled) return
         setPeople((body.matches ?? []).map(fromApi))
+        setPage(0)
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -205,9 +208,15 @@ export function Matches({
     onConnected?.()
   }
 
-  const top = people[0]
-  const others = people.slice(1)
+  const pageCount = Math.max(1, Math.ceil(people.length / PAGE_SIZE))
+  const safePage = Math.min(page, pageCount - 1)
+  const start = safePage * PAGE_SIZE
+  const visible = people.slice(start, start + PAGE_SIZE)
+  const top = safePage === 0 ? visible[0] : undefined
+  const others = safePage === 0 ? visible.slice(1) : visible
   const heading = viewer.first_name ? `${viewer.first_name}, people near you` : "People near you"
+  const range =
+    people.length === 0 ? "" : `Showing ${start + 1}-${start + visible.length} of ${people.length}`
 
   return (
     <section className="matches">
@@ -219,7 +228,9 @@ export function Matches({
             ? null
             : people.length === 0
               ? "No one else has a profile yet. When someone finishes theirs, they will show up here."
-              : `Start with the person at the top. ${people.length} shown, highest score first. 40 points when they know something you want to learn. City, gathering size, and age add the rest, up to 100.`}
+              : people.length > PAGE_SIZE
+                ? `Start with the closest four. ${range}, highest score first. 40 points when they know something you want to learn. City, gathering size, and age add the rest, up to 100.`
+                : `Start with the person at the top. ${people.length} shown, highest score first. 40 points when they know something you want to learn. City, gathering size, and age add the rest, up to 100.`}
       </p>
       {error ? <p className="error">Could not load people. {error}</p> : null}
       {top ? (
@@ -238,6 +249,29 @@ export function Matches({
           />
         ))}
       </ol>
+      {people.length > PAGE_SIZE ? (
+        <nav className="pager" aria-label="More people">
+          <button
+            type="button"
+            className="ghost"
+            disabled={safePage === 0}
+            onClick={() => setPage((current) => Math.max(0, current - 1))}
+          >
+            Previous
+          </button>
+          <p className="meta">
+            Page {safePage + 1} of {pageCount}
+          </p>
+          <button
+            type="button"
+            className="ghost"
+            disabled={safePage >= pageCount - 1}
+            onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}
+          >
+            Next
+          </button>
+        </nav>
+      ) : null}
     </section>
   )
 }
