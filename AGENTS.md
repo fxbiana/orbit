@@ -45,10 +45,10 @@ These decisions are locked for planning and implementation. Change them only wit
 - Ticketmaster is an ingestion source for that shape, not a parallel data model.
 - First event UX lives on the website (search or seeded list by `profile.location`). Extension tab detection comes after attendance APIs exist.
 
-### Spotify (when built)
+### Spotify (implemented)
 
-- Optional personalization only. Clerk Spotify external account + Flask import using the user’s OAuth token from Clerk.
-- Map normalized genres into existing `interests.knows` / `interests.wants_to_learn` (no new topic key). User confirms suggested chips before save.
+- This is implemented: Clerk Spotify external account, Flask import with the user token from Clerk, recent tracks plus short-term top artists and tracks, optional model suggestions into the existing five topics. The user confirms suggested chips before save.
+- Do not add a new topic key.
 - Do not depend on Spotify audio features, recommendations, or related-artists APIs (unavailable to new apps).
 
 ## Layout
@@ -126,6 +126,7 @@ The API container runs `flask --debug` on port 5000. The website container runs 
 | GET | `/api/plans/<plan_id>/matches` | Clerk session; compatibility among members; needs onboarding |
 | GET | `/api/tickets` | Clerk session |
 | POST | `/api/tickets` | Clerk session, JSON `{ "title", "url" }` |
+| POST | `/api/spotify/import` | Clerk session; suggests topic chips from Spotify listening; does not write onboarding |
 
 Decorator order on a view is `@bp.get`, `@bp.post`, or `@bp.put`, then `@caller_required`. New routes go on a blueprint under `backend/app/routes/` and return JSON.
 

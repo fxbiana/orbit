@@ -3,41 +3,83 @@ import { sessionToken } from "./api"
 const apiBase = () =>
   (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "")
 
-export type SpotifyArtist = {
-  name: string
-  imageUrl: string | null
+export type SpotifyArtist = { name: string; genres: string[]; imageUrl: string | null }
+export type SpotifyTrack = { name: string; artists: string[] }
+export type SpotifyTopic = { knows: string[]; wants_to_learn: string[] }
+export type SpotifySuggestions = {
+  languages: SpotifyTopic
+  locations: SpotifyTopic
+  hobbies: SpotifyTopic
+  interests: SpotifyTopic
+  festivals: SpotifyTopic
 }
-
 export type SpotifyImport = {
-  genres: string[]
   artists: SpotifyArtist[]
-  suggestions: {
-    knows: string[]
-    wants_to_learn: string[]
-  }
-}
-
-function artists(value: unknown): SpotifyArtist[] {
-  if (!Array.isArray(value)) return []
-  const portraits: SpotifyArtist[] = []
-  for (const item of value) {
-    if (!item || typeof item !== "object") continue
-    const record = item as Record<string, unknown>
-    if (typeof record.name !== "string") continue
-    const name = record.name.trim()
-    if (!name) continue
-    const image = record.image_url
-    portraits.push({
-      name,
-      imageUrl: typeof image === "string" && image.startsWith("https://") ? image : null,
-    })
-  }
-  return portraits
+  tracks: SpotifyTrack[]
+  genres: string[]
+  suggestions: SpotifySuggestions
+  model: string | null
 }
 
 function strings(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value.filter((item): item is string => typeof item === "string")
+}
+
+function emptyTopic(): SpotifyTopic {
+  return { knows: [], wants_to_learn: [] }
+}
+
+function topic(value: unknown): SpotifyTopic {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return emptyTopic()
+  const record = value as Record<string, unknown>
+  return {
+    knows: strings(record.knows),
+    wants_to_learn: strings(record.wants_to_learn),
+  }
+}
+
+function suggestionsOf(value: Record<string, unknown>): SpotifySuggestions {
+  return {
+    languages: topic(value.languages),
+    locations: topic(value.locations),
+    hobbies: topic(value.hobbies),
+    interests: topic(value.interests),
+    festivals: topic(value.festivals),
+  }
+}
+
+function artistsOf(value: unknown): SpotifyArtist[] {
+  if (!Array.isArray(value)) return []
+  const artists: SpotifyArtist[] = []
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue
+    const record = item as Record<string, unknown>
+    if (typeof record.name !== "string") continue
+    const name = record.name.trim()
+    if (!name) continue
+    const image = record.image_url
+    artists.push({
+      name,
+      genres: strings(record.genres),
+      imageUrl: typeof image === "string" && image.startsWith("https://") ? image : null,
+    })
+  }
+  return artists
+}
+
+function tracksOf(value: unknown): SpotifyTrack[] {
+  if (!Array.isArray(value)) return []
+  const tracks: SpotifyTrack[] = []
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue
+    const record = item as Record<string, unknown>
+    tracks.push({
+      name: typeof record.name === "string" ? record.name : "",
+      artists: strings(record.artists),
+    })
+  }
+  return tracks
 }
 
 async function errorMessage(response: Response): Promise<string> {
@@ -67,17 +109,17 @@ export async function importSpotify(getToken: () => Promise<string | null>): Pro
   } catch {
     throw new Error("Spotify import failed")
   }
-  if (!body || typeof body !== "object") throw new Error("Spotify import failed")
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("Spotify import failed")
   const record = body as Record<string, unknown>
   const suggestions = record.suggestions
-  if (!suggestions || typeof suggestions !== "object") throw new Error("Spotify import failed")
-  const suggestion = suggestions as Record<string, unknown>
+  if (!suggestions || typeof suggestions !== "object" || Array.isArray(suggestions)) {
+    throw new Error("Spotify import failed")
+  }
   return {
+    artists: artistsOf(record.artists),
+    tracks: tracksOf(record.tracks),
     genres: strings(record.genres),
-    artists: artists(record.artists),
-    suggestions: {
-      knows: strings(suggestion.knows),
-      wants_to_learn: strings(suggestion.wants_to_learn),
-    },
+    suggestions: suggestionsOf(suggestions as Record<string, unknown>),
+    model: typeof record.model === "string" ? record.model : null,
   }
 }

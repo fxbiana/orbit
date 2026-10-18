@@ -141,11 +141,13 @@ it("starts with Spotify, then you, reach, and preferences", async () => {
   expect(screen.getByRole("heading", { name: "Your preferences" })).toBeInTheDocument()
   expect(screen.getByText("Step 4 of 4")).toBeInTheDocument()
   expect(screen.getByLabelText("Languages you speak")).toHaveValue("English")
-  expect(screen.getByLabelText("Preferences you already have")).toHaveValue("Cooking, Seattle, Diwali")
-  expect(screen.getByLabelText("Preferences you want")).toHaveValue("Dance")
+  expect(screen.getByLabelText("Hobbies you do")).toHaveValue("Cooking")
+  expect(screen.getByLabelText("Hobbies you want to try")).toHaveValue("Dance")
+  expect(screen.getByLabelText("Places you know")).toHaveValue("Seattle")
+  expect(screen.getByLabelText("Festivals you know")).toHaveValue("Diwali")
+  expect(screen.getByLabelText("Interests you have")).toHaveValue("")
   expect(screen.queryByLabelText("City")).not.toBeInTheDocument()
-  expect(screen.queryByLabelText("Hobbies you do")).not.toBeInTheDocument()
-  expect(screen.queryByText(/hobbies, places, interests, and festivals/i)).not.toBeInTheDocument()
+  expect(screen.getByText(/hobbies, places, interests, and festivals/i)).toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "Find your people" }))
 
   expect(await screen.findByRole("heading", { name: "Priya, people near you" })).toBeInTheDocument()
@@ -163,10 +165,10 @@ it("starts with Spotify, then you, reach, and preferences", async () => {
     expect.objectContaining({
       location: "Seattle",
       languages: { knows: ["English"], wants_to_learn: [] },
-      interests: { knows: ["Cooking", "Seattle", "Diwali"], wants_to_learn: ["Dance"] },
-      hobbies: { knows: [], wants_to_learn: [] },
-      locations: { knows: [], wants_to_learn: [] },
-      festivals: { knows: [], wants_to_learn: [] },
+      hobbies: { knows: ["Cooking"], wants_to_learn: ["Dance"] },
+      locations: { knows: ["Seattle"], wants_to_learn: [] },
+      festivals: { knows: ["Diwali"], wants_to_learn: [] },
+      interests: { knows: [], wants_to_learn: [] },
     }),
   )
 })
@@ -221,7 +223,7 @@ it("starts a blank form when this account has no profile", async () => {
   expect(screen.getByRole("heading", { name: "Your preferences" })).toBeInTheDocument()
 })
 
-it("merges Spotify suggestions into grouped preferences and leaves about fields alone", async () => {
+it("merges Spotify suggestions into each topic and leaves about fields alone", async () => {
   vi.mocked(getOnboarding).mockResolvedValue(null)
   vi.stubGlobal(
     "fetch",
@@ -229,7 +231,17 @@ it("merges Spotify suggestions into grouped preferences and leaves about fields 
       ok: true,
       json: async () => ({
         genres: ["jazz", "indie"],
-        suggestions: { knows: ["Jazz", "cooking"], wants_to_learn: ["Tabla"] },
+        artists: [{ name: "Miles Davis", genres: ["jazz"] }],
+        tracks: [{ name: "So What", artists: ["Miles Davis"] }],
+        top_tracks: [{ name: "Ignored", artists: ["Nobody"] }],
+        model: null,
+        suggestions: {
+          languages: { knows: ["Spanish"], wants_to_learn: [] },
+          interests: { knows: ["Jazz"], wants_to_learn: [] },
+          hobbies: { knows: [], wants_to_learn: ["Tabla"] },
+          festivals: { knows: ["Jazz"], wants_to_learn: [] },
+          locations: { knows: [], wants_to_learn: ["Berlin"] },
+        },
         location: "Seattle",
         username: "hacked",
         first_name: "Nope",
@@ -243,9 +255,8 @@ it("merges Spotify suggestions into grouped preferences and leaves about fields 
   fillAbout()
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
-  fireEvent.change(screen.getByLabelText("Preferences you already have"), {
-    target: { value: "Cooking, Diwali" },
-  })
+  fireEvent.change(screen.getByLabelText("Hobbies you do"), { target: { value: "Cooking" } })
+  fireEvent.change(screen.getByLabelText("Festivals you know"), { target: { value: "Diwali" } })
   fireEvent.click(screen.getByRole("button", { name: "Back" }))
   fireEvent.click(screen.getByRole("button", { name: "Back" }))
   fireEvent.click(screen.getByRole("button", { name: "Back" }))
@@ -255,8 +266,12 @@ it("merges Spotify suggestions into grouped preferences and leaves about fields 
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
-  expect(screen.getByLabelText("Preferences you already have")).toHaveValue("Cooking, Diwali, Jazz")
-  expect(screen.getByLabelText("Preferences you want")).toHaveValue("Tabla")
+  expect(screen.getByLabelText("Hobbies you do")).toHaveValue("Cooking")
+  expect(screen.getByLabelText("Hobbies you want to try")).toHaveValue("Tabla")
+  expect(screen.getByLabelText("Places you want to learn about")).toHaveValue("Berlin")
+  expect(screen.getByLabelText("Interests you have")).toHaveValue("Jazz")
+  expect(screen.getByLabelText("Festivals you know")).toHaveValue("Diwali, Jazz")
+  expect(screen.getByLabelText("Languages you speak")).toHaveValue("Spanish")
   fireEvent.click(screen.getByRole("button", { name: "Back" }))
   fireEvent.click(screen.getByRole("button", { name: "Back" }))
   fireEvent.click(screen.getByRole("button", { name: "Back" }))
@@ -288,7 +303,13 @@ it("keeps a comma inside a Spotify artist name", async () => {
           { name: "Tyler, The Creator", image_url: "https://i.scdn.co/image/tyler" },
           { name: "Steve Lacy", image_url: "https://i.scdn.co/image/steve" },
         ],
-        suggestions: { knows: ["Tyler, The Creator", "Steve Lacy"], wants_to_learn: [] },
+        suggestions: {
+          languages: { knows: [], wants_to_learn: [] },
+          locations: { knows: [], wants_to_learn: [] },
+          hobbies: { knows: [], wants_to_learn: [] },
+          interests: { knows: ["Tyler, The Creator", "Steve Lacy"], wants_to_learn: [] },
+          festivals: { knows: [], wants_to_learn: [] },
+        },
       }),
     })),
   )
@@ -310,7 +331,7 @@ it("keeps a comma inside a Spotify artist name", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
   fireEvent.click(screen.getByRole("button", { name: "Basketball" }))
 
-  expect(screen.getByLabelText("Preferences you already have")).toHaveValue(
+  expect(screen.getByLabelText("Interests you have")).toHaveValue(
     "Tyler, The Creator, Steve Lacy, Basketball",
   )
   fireEvent.click(screen.getByRole("button", { name: "Find your people" }))
@@ -342,9 +363,7 @@ it("keeps typed preferences when Spotify import fails", async () => {
   fillAbout()
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
-  fireEvent.change(screen.getByLabelText("Preferences you already have"), {
-    target: { value: "Cooking" },
-  })
+  fireEvent.change(screen.getByLabelText("Hobbies you do"), { target: { value: "Cooking" } })
   fireEvent.click(screen.getByRole("button", { name: "Back" }))
   fireEvent.click(screen.getByRole("button", { name: "Back" }))
   fireEvent.click(screen.getByRole("button", { name: "Back" }))
@@ -354,6 +373,6 @@ it("keeps typed preferences when Spotify import fails", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
-  expect(screen.getByLabelText("Preferences you already have")).toHaveValue("Cooking")
-  expect(screen.getByLabelText("Preferences you already have")).toBeEnabled()
+  expect(screen.getByLabelText("Hobbies you do")).toHaveValue("Cooking")
+  expect(screen.getByLabelText("Hobbies you do")).toBeEnabled()
 })
