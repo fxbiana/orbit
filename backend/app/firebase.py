@@ -264,13 +264,16 @@ def _member_snapshot(plan_id: str, viewer_id: str) -> tuple[int, bool, list[dict
 
 
 def list_open_plans(viewer_id: str) -> list[dict]:
-    """Return open plans newest first, with member_count and viewer_joined."""
+    """Return open plans newest first, with member_count and viewer_joined.
+
+    Filter by ``status`` in the query, then sort ``created_at`` in process.
+    That avoids a composite Firestore index on ``status`` + ``created_at``.
+    """
     try:
-        docs = (
-            _plans()
-            .where("status", "==", "open")
-            .order_by("created_at", direction=firestore.Query.DESCENDING)
-            .stream()
+        docs = list(_plans().where("status", "==", "open").stream())
+        docs.sort(
+            key=lambda doc: (doc.to_dict() or {}).get("created_at") or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
         )
         plans: list[dict] = []
         for doc in docs:
