@@ -13,6 +13,10 @@ addressed to ``DEMO_USER_ID``. Sign in as that user to see the request in
 Reach. The connection stays pending, so Instagram, Discord, and Snapchat stay
 hidden. No contact document is written.
 
+It also writes score probes for the Clerk profile that already confirmed the
+most Spotify-backed interests. Those probes check complementary scoring
+against that person's knows, wants, city, age, and gathering size.
+
 From ``backend/``:
 
     python seed_profiles.py
@@ -24,8 +28,10 @@ from pathlib import Path
 
 from app.auth import _USER_ID
 from app.connections import pair_id
+from app.matching import PREFERENCE_TOPICS
 from app.onboarding import TOPIC_KEYS, parse_onboarding
 from app.plans import parse_plan_create
+from score_probes import build_score_probes
 
 STORED_FIELDS = ("username", "first_name", "location", "age", "gathering_size", *TOPIC_KEYS)
 SAMPLE_PEOPLE_PATH = Path(__file__).resolve().parent / "sample_people.json"
@@ -98,6 +104,61 @@ def demo_seed_documents(people: list[dict]) -> dict:
     }
 
 
+def _preference_knows(profile: dict) -> list[str]:
+    seen: set[str] = set()
+    items: list[str] = []
+    for topic in PREFERENCE_TOPICS:
+        raw = profile.get(topic) or {}
+        if not isinstance(raw, dict):
+            continue
+        for item in raw.get("knows") or []:
+            if not isinstance(item, str):
+                continue
+            key = item.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append(item)
+    return items
+
+
+def listener_for_probes(client) -> dict | None:
+    """Onboarding profile whose confirmed interests include a Spotify import.
+
+    Matching reads onboarding, so the probes are built from that document.
+    The Spotify snapshot only decides which accounts are listeners.
+    """
+    best: tuple[int, str, dict] | None = None
+    for snap in client.collection_group("profile").stream():
+        if snap.id != "spotify":
+            continue
+        genres = (snap.to_dict() or {}).get("genres") or []
+        if not isinstance(genres, list) or not genres:
+            continue
+        parts = snap.reference.path.split("/")
+        if len(parts) < 2:
+            continue
+        user_id = parts[1]
+        stored = client.document(f"users/{user_id}/profile/onboarding").get()
+        if not stored.exists:
+            continue
+        profile = stored.to_dict() or {}
+        knows = _preference_knows(profile)
+        if not knows:
+            continue
+        rank = (len(knows), user_id)
+        if best is None or rank > (best[0], best[1]):
+            best = (len(knows), user_id, profile)
+    if best is None:
+        return None
+    return best[2]
+
+
+def score_probe_documents(viewer: dict) -> list[tuple[str, dict]]:
+    """Validated onboarding documents for one listener."""
+    return [document_for(person) for person in build_score_probes(viewer)]
+
+
 def main() -> None:
     from app import create_app
     from app.firebase import firestore_client, save_onboarding
@@ -119,7 +180,12 @@ def main() -> None:
         client.collection("connections").document(demo["connection_id"]).set(
             {**demo["connection"], "created_at": now, "updated_at": now}
         )
+        listener = listener_for_probes(client)
+        probes = score_probe_documents(listener) if listener is not None else []
+        for user_id, profile in probes:
+            save_onboarding(user_id, profile)
     print(f"Wrote {len(documents)} onboarding profiles")
+    print(f"Wrote {len(probes)} score probes")
     print(f"Example path: users/{documents[0][0]}/profile/onboarding")
     print(f"Open plan: plans/{demo['plan_id']}")
     print(f"Pending request to {DEMO_USER_ID}: connections/{demo['connection_id']}")

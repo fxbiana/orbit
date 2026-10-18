@@ -49,21 +49,28 @@ def suggestions_from_genres(genres: list[str]) -> dict:
     return {"knows": list(genres), "wants_to_learn": []}
 
 
-def fetch_top_artist_genres(access_token: str, opener=urllib.request.urlopen) -> list[str]:
-    """GET the caller's top artists and collect preference labels.
+def fetch_spotify_taste(access_token: str, opener=urllib.request.urlopen) -> dict:
+    """GET top artists once and return preference labels plus portrait URLs.
 
     Tries the last six months first, then the last month, then several years.
     Reads ``artists`` when present, otherwise Spotify's ``items`` array.
     Uses genre labels when Spotify sends them. When every genre list is empty,
     uses the artist names so a music taste still becomes a suggestion.
-    Does not call audio-features, recommendations, or related-artists.
+    Portrait URLs come from that same payload. Does not call audio-features,
+    recommendations, or related-artists.
     """
     for time_range in _TIME_RANGES:
         payload = _read_top_artists(access_token, time_range, opener)
-        labels = _labels_from_artists(payload)
+        rows = _artist_rows(payload)
+        labels = _labels_from_rows(rows)
         if labels:
-            return labels
-    return []
+            return {"labels": labels, "artists": portrait_artists(rows)}
+    return {"labels": [], "artists": []}
+
+
+def fetch_top_artist_genres(access_token: str, opener=urllib.request.urlopen) -> list[str]:
+    """Preference labels from the caller's top artists."""
+    return fetch_spotify_taste(access_token, opener)["labels"]
 
 
 def _read_top_artists(access_token: str, time_range: str, opener) -> dict:
@@ -100,19 +107,74 @@ def _read_top_artists(access_token: str, time_range: str, opener) -> dict:
     return payload
 
 
-def _labels_from_artists(payload: dict) -> list[str]:
-    genres: list[str] = []
-    names: list[str] = []
+def _artist_rows(payload: dict) -> list[dict]:
+    rows: list[dict] = []
     for artist in _artist_list(payload):
         if not isinstance(artist, dict):
             continue
         name = artist.get("name")
-        if isinstance(name, str) and name.strip():
-            names.append(name.strip())
+        name = name.strip() if isinstance(name, str) else ""
         values = artist.get("genres") or []
-        if isinstance(values, list):
-            genres.extend(value for value in values if isinstance(value, str) and value.strip())
+        genres = (
+            [value.strip() for value in values if isinstance(value, str) and value.strip()]
+            if isinstance(values, list)
+            else []
+        )
+        rows.append({"name": name, "genres": genres, "image_url": _portrait_url(artist)})
+    return rows
+
+
+def _labels_from_rows(rows: list[dict]) -> list[str]:
+    genres: list[str] = []
+    names: list[str] = []
+    for row in rows:
+        if row["name"]:
+            names.append(row["name"])
+        genres.extend(row["genres"])
     return genres or names
+
+
+def portrait_artists(rows: list[dict]) -> list[dict]:
+    """Named artists with an https image, deduped. Display only — not a topic."""
+    seen: set[str] = set()
+    portraits: list[dict] = []
+    for row in rows:
+        name = " ".join(row["name"].split())
+        if not name:
+            continue
+        key = name.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        image = row.get("image_url")
+        image_url = image if isinstance(image, str) and image.startswith("https://") else None
+        portraits.append({"name": name, "image_url": image_url})
+        if len(portraits) >= _MAX_GENRES:
+            break
+    return portraits
+
+
+def _portrait_url(artist: dict) -> str | None:
+    """Pick a mid-size https image. Spotify lists the largest first."""
+    images = artist.get("images")
+    if not isinstance(images, list):
+        return None
+    best_url = None
+    best_score = None
+    best_width = None
+    for image in images:
+        if not isinstance(image, dict):
+            continue
+        url = image.get("url")
+        if not isinstance(url, str) or not url.startswith("https://"):
+            continue
+        width = image.get("width") if isinstance(image.get("width"), int) else 640
+        score = abs(width - 320)
+        if best_score is None or score < best_score or (score == best_score and width > (best_width or 0)):
+            best_url = url
+            best_score = score
+            best_width = width
+    return best_url
 
 
 def _artist_list(payload) -> list:

@@ -13,7 +13,6 @@ import {
   type LinkStatus,
 } from "./Reach"
 import {
-  CITIES,
   FLOW_STEPS,
   GATHERING_SIZES,
   ONBOARDING_LIMITS,
@@ -31,9 +30,33 @@ import {
   type Knowledge,
   type OnboardingInput,
 } from "./onboarding"
+import { CityMap } from "./CityMap"
 import { SpotifyConnect } from "./SpotifyConnect"
 import { importMeta } from "./meta"
-import { importSpotify } from "./spotify"
+import { importSpotify, type SpotifyArtist } from "./spotify"
+
+function artistInitials(name: string): string {
+  const parts = name.split(/[\s,]+/).filter(Boolean)
+  const letters = parts.slice(0, 2).map((part) => part[0]?.toLocaleUpperCase() ?? "")
+  return letters.join("") || "•"
+}
+
+function ArtistCard({ artist }: { artist: SpotifyArtist }) {
+  const [failed, setFailed] = useState(false)
+  const showImage = Boolean(artist.imageUrl) && !failed
+  return (
+    <li>
+      {showImage ? (
+        <img src={artist.imageUrl ?? undefined} alt="" onError={() => setFailed(true)} />
+      ) : (
+        <span className="artist-fallback" aria-hidden="true">
+          {artistInitials(artist.name)}
+        </span>
+      )}
+      <span className="artist-name">{artist.name}</span>
+    </li>
+  )
+}
 
 type TopicDraft = { knows: string; wants: string }
 
@@ -211,6 +234,8 @@ export function OnboardingForm({
   const [reachKey, setReachKey] = useState(0)
   const [profileDismissed, setProfileDismissed] = useState(false)
   const [links, setLinks] = useState<Record<string, LinkStatus>>({})
+  const [spotifyGenres, setSpotifyGenres] = useState<string[]>([])
+  const [spotifyArtists, setSpotifyArtists] = useState<SpotifyArtist[]>([])
   const [spotifySummary, setSpotifySummary] = useState<string | null>(null)
   const [spotifyError, setSpotifyError] = useState<string | null>(null)
   const [spotifyBusy, setSpotifyBusy] = useState(false)
@@ -334,7 +359,11 @@ export function OnboardingForm({
           },
         }
       })
-      setSpotifySummary(`Spotify suggested: ${result.genres.join(", ")}`)
+      setSpotifyGenres(result.genres)
+      setSpotifyArtists(result.artists)
+      const artistNames = new Set(result.artists.map((artist) => artist.name.toLocaleLowerCase()))
+      const namedArtists = result.artists.length > 0 && result.genres.every((genre) => artistNames.has(genre.toLocaleLowerCase()))
+      setSpotifySummary(namedArtists ? null : `Spotify suggested: ${result.genres.join(", ")}`)
     } catch (err) {
       setSpotifyError(err instanceof Error ? err.message : "Spotify import failed")
     } finally {
@@ -427,26 +456,68 @@ export function OnboardingForm({
       <p className="step-count">
         Step {stepIndex + 1} of {FLOW_STEPS.length}
       </p>
-      <div className="track" aria-hidden="true">
+      <ol className="steps" aria-hidden="true">
         {FLOW_STEPS.map((item, index) => (
-          <span
+          <li
             key={item.id}
             className={index < stepIndex ? "done" : index === stepIndex ? "now" : undefined}
-          />
+          >
+            {item.label}
+          </li>
         ))}
-      </div>
+      </ol>
       <h2>{step.title}</h2>
       {step.id === "about" ? (
         <p className="note">Orbit does not pull your name or city from connected accounts.</p>
       ) : null}
       {step.id === "reach" ? (
-        <p className="note">Usernames are optional. Spotify and Meta suggestions come next.</p>
+        <p className="note">Usernames are optional. Add the place you actually answer.</p>
       ) : null}
       {step.id === "preferences" ? (
         <p className="note">
-          Add sports, food, outdoors, or anything else you want to do with people. Separate items with commas.
-          Spotify only adds music.
+          Interests from Spotify are already in these lists when you asked for them. Add sports, food,
+          outdoors, or anything else you want to do with people. Separate items with commas.
         </p>
+      ) : null}
+
+      {step.id === "spotify" ? (
+        <div className="listen">
+          <div className="record" aria-hidden="true" />
+          <div>
+            <p>
+              Connect Spotify and we’ll suggest interests from what you listen to. Edit them on the last
+              step, or continue without connecting.
+            </p>
+            <SpotifyConnect lead />
+            <button
+              type="button"
+              className="ghost"
+              disabled={spotifyBusy}
+              onClick={() => void suggestFromSpotify()}
+            >
+              {spotifyBusy ? "Suggesting…" : "Suggest from Spotify"}
+            </button>
+            {spotifySummary ? <p className="note">{spotifySummary}</p> : null}
+            {spotifyGenres.length > 0 && spotifySummary ? (
+              <ul className="chips">
+                {spotifyGenres.map((genre) => (
+                  <li key={genre}>{genre}</li>
+                ))}
+              </ul>
+            ) : null}
+            {spotifyError ? <p className="error">{spotifyError}</p> : null}
+          </div>
+          {spotifyArtists.length > 0 ? (
+            <div className="artist-shelf">
+              <p className="note shelf-label">Your top artists</p>
+              <ul className="artist-grid">
+                {spotifyArtists.map((artist) => (
+                  <ArtistCard key={artist.name} artist={artist} />
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
       ) : null}
 
       {step.id === "about" ? (
@@ -484,22 +555,10 @@ export function OnboardingForm({
               onChange={(event) => setDraft((current) => ({ ...current, age: event.target.value }))}
             />
           </label>
-          <label htmlFor="location">
-            City
-            <select
-              id="location"
-              name="location"
-              value={CITIES.some((city) => city === draft.location) ? draft.location : ""}
-              onChange={(event) => setDraft((current) => ({ ...current, location: event.target.value }))}
-            >
-              <option value="">Choose a city</option>
-              {CITIES.map((city) => (
-                <option key={city} value={city}>
-                  {city}
-                </option>
-              ))}
-            </select>
-          </label>
+          <CityMap
+            value={draft.location}
+            onChange={(location) => setDraft((current) => ({ ...current, location }))}
+          />
           <fieldset className="choices">
             <legend>Group size you want</legend>
             {GATHERING_SIZES.map((size) => (
@@ -576,17 +635,6 @@ export function OnboardingForm({
               onChange={(event) => updatePreferences("wants", event.target.value)}
             />
           </label>
-          <SpotifyConnect />
-          <button
-            type="button"
-            className="ghost"
-            disabled={spotifyBusy}
-            onClick={() => void suggestFromSpotify()}
-          >
-            {spotifyBusy ? "Suggesting…" : "Suggest from Spotify"}
-          </button>
-          {spotifySummary ? <p className="note">{spotifySummary}</p> : null}
-          {spotifyError ? <p className="error">{spotifyError}</p> : null}
           <button type="button" className="ghost" disabled={metaBusy} onClick={() => void suggestFromMeta()}>
             {metaBusy ? "Suggesting…" : "Suggest languages from Meta"}
           </button>

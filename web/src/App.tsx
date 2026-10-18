@@ -126,7 +126,8 @@ function Hero() {
         </div>
         <div>
           <p>They already know</p>
-          <strong>Amira · 100</strong>
+          <strong>Amira</strong>
+          <span>100 match</span>
         </div>
       </div>
     </section>

@@ -102,13 +102,14 @@ export const PREFERENCE_GROUP_LABELS = {
 /** One-tap interests outside music. Spotify only fills the music side. */
 export const INTEREST_STARTERS = ["Basketball", "Soccer", "Hiking", "Cooking", "Art", "Games"] as const
 
-export const FLOW_STEPS: { id: FlowStepId; title: string }[] = [
-  { id: "about", title: "About you" },
-  { id: "reach", title: "How you want to be reached" },
-  { id: "preferences", title: "Your preferences" },
+export const FLOW_STEPS: { id: FlowStepId; title: string; label: string }[] = [
+  { id: "spotify", title: "Start from Spotify", label: "Spotify" },
+  { id: "about", title: "About you", label: "You" },
+  { id: "reach", title: "How you want to be reached", label: "Reach" },
+  { id: "preferences", title: "Your preferences", label: "Preferences" },
 ]
 
-export type FlowStepId = "about" | "reach" | "preferences"
+export type FlowStepId = "spotify" | "about" | "reach" | "preferences"
 
 export function cleanText(value: string): string {
   return value.trim().replace(/\s+/g, " ")
@@ -228,7 +229,7 @@ export function validateOnboarding(input: OnboardingInput): string | null {
 }
 
 export function validateFlowStep(step: FlowStepId, input: OnboardingInput): string | null {
-  if (step === "reach") return null
+  if (step === "spotify" || step === "reach") return null
   if (step === "about") return aboutProblem(input)
 
   const languages = PROFILE_FIELDS.find((field) => field.key === "languages")

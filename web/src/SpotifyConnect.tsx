@@ -20,7 +20,7 @@ function isSpotify(account: ExternalAccount): boolean {
   return provider === "oauth_spotify" || provider === "spotify"
 }
 
-export function SpotifyConnect() {
+export function SpotifyConnect({ lead = false }: { lead?: boolean }) {
   const { isLoaded, user } = useUser()
   const [message, setMessage] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
@@ -55,11 +55,18 @@ export function SpotifyConnect() {
   }
 
   if (!isLoaded) return null
-  if (connected) return <p className="note">Spotify is connected. Suggest preferences when you are ready.</p>
+  if (connected) {
+    return <p className="note">Spotify is connected. Suggest interests when you are ready.</p>
+  }
 
   return (
     <div>
-      <button type="button" className="ghost" disabled={!spotifyUser || pending} onClick={() => void connect()}>
+      <button
+        type="button"
+        className={lead ? "primary" : "ghost"}
+        disabled={!spotifyUser || pending}
+        onClick={() => void connect()}
+      >
         {pending ? "Connecting…" : "Connect Spotify"}
       </button>
       {message ? <p className="meta">{message}</p> : null}

@@ -4,7 +4,12 @@ from urllib.error import HTTPError
 
 import pytest
 
-from app.spotify import SpotifyImportError, fetch_top_artist_genres, normalize_genres
+from app.spotify import (
+    SpotifyImportError,
+    fetch_spotify_taste,
+    fetch_top_artist_genres,
+    normalize_genres,
+)
 
 
 class _Node:
@@ -137,6 +142,35 @@ def test_fetch_top_artist_genres_http_error():
         fetch_top_artist_genres("spotify-token", opener=opener)
 
 
+def test_fetch_spotify_taste_keeps_a_midsize_https_portrait():
+    def opener(request, timeout=None):
+        body = json.dumps(
+            {
+                "items": [
+                    {
+                        "name": "Steve Lacy",
+                        "genres": [],
+                        "images": [
+                            {"url": "https://i.scdn.co/image/large", "width": 640},
+                            {"url": "https://i.scdn.co/image/mid", "width": 320},
+                            {"url": "https://i.scdn.co/image/small", "width": 160},
+                            {"url": "http://evil.test/x", "width": 320},
+                        ],
+                    },
+                    {"name": "Steve Lacy", "genres": [], "images": []},
+                ]
+            }
+        ).encode()
+        return _Body(body)
+
+    taste = fetch_spotify_taste("spotify-token", opener=opener)
+
+    assert taste["labels"] == ["Steve Lacy", "Steve Lacy"]
+    assert taste["artists"] == [
+        {"name": "Steve Lacy", "image_url": "https://i.scdn.co/image/mid"},
+    ]
+
+
 def test_import_normalizes_genres_and_stores_snapshot_without_token(client, monkeypatch):
     store = _Client()
     monkeypatch.setattr("app.firebase.firestore_client", lambda: store)
@@ -145,8 +179,15 @@ def test_import_normalizes_genres_and_stores_snapshot_without_token(client, monk
         lambda user_id, secret_key: "should-not-be-stored",
     )
     monkeypatch.setattr(
-        "app.routes.spotify.fetch_top_artist_genres",
-        lambda access_token, opener=None: ["  alt   rock ", "ALT ROCK", "jazz", ""],
+        "app.routes.spotify.fetch_spotify_taste",
+        lambda access_token, opener=None: {
+            "labels": ["  alt   rock ", "ALT ROCK", "jazz", ""],
+            "artists": [
+                {"name": "KAYTRANADA", "image_url": "https://i.scdn.co/image/kay"},
+                {"name": "KAYTRANADA", "image_url": "https://i.scdn.co/image/dup"},
+                {"name": "SZA", "image_url": "http://insecure.example/sza"},
+            ],
+        },
     )
 
     response = client.post(
@@ -159,6 +200,10 @@ def test_import_normalizes_genres_and_stores_snapshot_without_token(client, monk
     body = response.get_json()
     assert body == {
         "genres": ["Alt Rock", "Jazz"],
+        "artists": [
+            {"name": "KAYTRANADA", "image_url": "https://i.scdn.co/image/kay"},
+            {"name": "SZA", "image_url": None},
+        ],
         "suggestions": {"knows": ["Alt Rock", "Jazz"], "wants_to_learn": []},
     }
 
@@ -182,7 +227,7 @@ def test_import_without_spotify_returns_404(client, monkeypatch):
         raise AssertionError("Spotify was called without a token")
 
     monkeypatch.setattr("app.routes.spotify.spotify_access_token", lambda user_id, secret_key: None)
-    monkeypatch.setattr("app.routes.spotify.fetch_top_artist_genres", fail_fetch)
+    monkeypatch.setattr("app.routes.spotify.fetch_spotify_taste", fail_fetch)
     monkeypatch.setattr(
         "app.routes.spotify.save_spotify_snapshot",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("snapshot was written")),
