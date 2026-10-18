@@ -163,16 +163,6 @@ export function ReachFields({
             <option value="facebook">Facebook</option>
           </select>
         </label>
-        <label className="span" htmlFor="reach-note">
-          When you reply
-          <input
-            id="reach-note"
-            maxLength={160}
-            value={draft.reach_note}
-            placeholder="Evenings on Discord"
-            onChange={(event) => onChange({ ...draft, reach_note: event.target.value })}
-          />
-        </label>
       </div>
     )
   }
@@ -283,17 +273,6 @@ export function ReachFields({
           Facebook
         </label>
       </fieldset>
-      <label htmlFor="reach-note">
-        When you usually reply
-        <textarea
-          id="reach-note"
-          rows={2}
-          maxLength={160}
-          value={draft.reach_note}
-          placeholder="I check Discord in the evening."
-          onChange={(event) => onChange({ ...draft, reach_note: event.target.value })}
-        />
-      </label>
     </>
   )
 }
@@ -457,7 +436,6 @@ function FriendCard({
     <article className="friend">
       <h3>{name}</h3>
       <p className="prefer">{preferLine(name, contact)}</p>
-      {contact.reach_note ? <p className="meta">{contact.reach_note}</p> : null}
       <SocialLinks contact={contact} />
       <Thread connectionId={connection.id} name={name} getToken={getToken} />
     </article>

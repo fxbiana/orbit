@@ -38,6 +38,21 @@ export const ONBOARDING_LIMITS = {
   list: 20,
 }
 
+export const CITIES = [
+  "Seattle",
+  "Portland",
+  "San Francisco",
+  "Los Angeles",
+  "Austin",
+  "Denver",
+  "Chicago",
+  "New York",
+  "Boston",
+  "Toronto",
+  "Vancouver",
+  "London",
+] as const
+
 export const GATHERING_SIZES = [
   { value: "2-5", label: "2-5 people" },
   { value: "6-15", label: "6-15 people" },
@@ -84,23 +99,53 @@ export const PREFERENCE_GROUP_LABELS = {
   wants: "Preferences you want",
 } as const
 
-export const FLOW_STEPS: { id: FlowStepId; title: string }[] = [
-  { id: "reach", title: "How you want to be reached" },
-  { id: "preferences", title: "Your preferences" },
-  { id: "about", title: "About you" },
+/** One-tap interests outside music. Spotify only fills the music side. */
+export const INTEREST_STARTERS = ["Basketball", "Soccer", "Hiking", "Cooking", "Art", "Games"] as const
+
+export const FLOW_STEPS: { id: FlowStepId; title: string; label: string }[] = [
+  { id: "spotify", title: "Start from Spotify", label: "Spotify" },
+  { id: "about", title: "About you", label: "You" },
+  { id: "reach", title: "How you want to be reached", label: "Reach" },
+  { id: "preferences", title: "Your preferences", label: "Preferences" },
 ]
 
-export type FlowStepId = "reach" | "preferences" | "about"
+export type FlowStepId = "spotify" | "about" | "reach" | "preferences"
 
 export function cleanText(value: string): string {
   return value.trim().replace(/\s+/g, " ")
 }
 
 export function parseList(value: string): string[] {
+  return parseListPreserving(value, [])
+}
+
+/** Split a comma list, keeping phrases such as "Tyler, The Creator" intact. */
+export function parseListPreserving(value: string, keep: readonly string[]): string[] {
+  const ranked = [...keep]
+    .map((item) => cleanText(item))
+    .filter((item) => item.includes(","))
+    .sort((left, right) => right.length - left.length)
+
+  let working = value
+  const slots: string[] = []
+  for (const item of ranked) {
+    const needle = item.toLocaleLowerCase()
+    let cursor = 0
+    while (cursor <= working.length) {
+      const found = working.toLocaleLowerCase().indexOf(needle, cursor)
+      if (found === -1) break
+      const token = `\u0000${slots.length}\u0000`
+      slots.push(cleanText(working.slice(found, found + item.length)))
+      working = `${working.slice(0, found)}${token}${working.slice(found + item.length)}`
+      cursor = found + token.length
+    }
+  }
+
   const seen = new Set<string>()
   const items: string[] = []
-  for (const part of value.split(",")) {
-    const text = cleanText(part)
+  for (const part of working.split(",")) {
+    const token = part.match(/^\s*\u0000(\d+)\u0000\s*$/)
+    const text = token ? slots[Number(token[1])] : cleanText(part)
     if (!text) continue
     const key = text.toLocaleLowerCase()
     if (seen.has(key)) continue
@@ -159,9 +204,8 @@ function aboutProblem(input: OnboardingInput): string | null {
     return "First name can be at most 80 characters."
   }
   const location = cleanText(input.location)
-  if (!location) return "Enter a location."
-  if (location.length > ONBOARDING_LIMITS.location) {
-    return "Location can be at most 80 characters."
+  if (!CITIES.some((city) => city.toLocaleLowerCase() === location.toLocaleLowerCase())) {
+    return "Choose a city."
   }
   if (!Number.isInteger(input.age)) return "Enter your age."
   if (input.age < ONBOARDING_LIMITS.ageMin || input.age > ONBOARDING_LIMITS.ageMax) {
@@ -185,7 +229,7 @@ export function validateOnboarding(input: OnboardingInput): string | null {
 }
 
 export function validateFlowStep(step: FlowStepId, input: OnboardingInput): string | null {
-  if (step === "reach") return null
+  if (step === "spotify" || step === "reach") return null
   if (step === "about") return aboutProblem(input)
 
   for (const field of PROFILE_FIELDS) {

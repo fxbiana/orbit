@@ -1,6 +1,7 @@
 import { FormEvent, Fragment, ReactNode, useCallback, useEffect, useState } from "react"
 import { getContact, getOnboarding, saveContact, saveOnboarding, sessionToken } from "./api"
 import { Matches } from "./Matches"
+import { NearbyEvents } from "./NearbyEvents"
 import { Plans } from "./Plans"
 import {
   ContactForm,
@@ -14,11 +15,13 @@ import {
 import {
   FLOW_STEPS,
   GATHERING_SIZES,
+  INTEREST_STARTERS,
   ONBOARDING_LIMITS,
   PROFILE_FIELDS,
+  TOPIC_KEYS,
   cleanText,
   formatList,
-  parseList,
+  parseListPreserving,
   validateFlowStep,
   validateOnboarding,
   type FlowStepId,
@@ -26,7 +29,33 @@ import {
   type OnboardingInput,
   type TopicKey,
 } from "./onboarding"
-import { importSpotify, type SpotifySuggestions } from "./spotify"
+import { CityMap } from "./CityMap"
+import { SpotifyConnect } from "./SpotifyConnect"
+import { importMeta } from "./meta"
+import { importSpotify, type SpotifyArtist, type SpotifySuggestions } from "./spotify"
+
+function artistInitials(name: string): string {
+  const parts = name.split(/[\s,]+/).filter(Boolean)
+  const letters = parts.slice(0, 2).map((part) => part[0]?.toLocaleUpperCase() ?? "")
+  return letters.join("") || "•"
+}
+
+function ArtistCard({ artist }: { artist: SpotifyArtist }) {
+  const [failed, setFailed] = useState(false)
+  const showImage = Boolean(artist.imageUrl) && !failed
+  return (
+    <li>
+      {showImage ? (
+        <img src={artist.imageUrl ?? undefined} alt="" onError={() => setFailed(true)} />
+      ) : (
+        <span className="artist-fallback" aria-hidden="true">
+          {artistInitials(artist.name)}
+        </span>
+      )}
+      <span className="artist-name">{artist.name}</span>
+    </li>
+  )
+}
 
 type TopicDraft = { knows: string; wants: string }
 
@@ -41,6 +70,7 @@ type Draft = {
   locations: TopicDraft
   interests: TopicDraft
   festivals: TopicDraft
+  kept: string[]
 }
 
 const PREFERENCE_KEYS = ["hobbies", "locations", "interests", "festivals"] as const satisfies readonly TopicKey[]
@@ -67,11 +97,19 @@ function topicText(topic: Knowledge): TopicDraft {
   }
 }
 
-function parsedTopic(topic: TopicDraft): Knowledge {
+function parsedTopic(topic: TopicDraft, kept: readonly string[]): Knowledge {
   return {
-    knows: parseList(topic.knows),
-    wants_to_learn: parseList(topic.wants),
+    knows: parseListPreserving(topic.knows, kept),
+    wants_to_learn: parseListPreserving(topic.wants, kept),
   }
+}
+
+function phrasesWithCommas(profile: OnboardingInput): string[] {
+  const phrases: string[] = []
+  for (const key of TOPIC_KEYS) {
+    phrases.push(...profile[key].knows, ...profile[key].wants_to_learn)
+  }
+  return phrases.filter((item) => item.includes(","))
 }
 
 function emptyDraft(): Draft {
@@ -86,6 +124,7 @@ function emptyDraft(): Draft {
     locations: emptyTopic(),
     interests: emptyTopic(),
     festivals: emptyTopic(),
+    kept: [],
   }
 }
 
@@ -101,6 +140,7 @@ function draftFromProfile(profile: OnboardingInput): Draft {
     locations: topicText(profile.locations),
     interests: topicText(profile.interests),
     festivals: topicText(profile.festivals),
+    kept: phrasesWithCommas(profile),
   }
 }
 
@@ -113,29 +153,69 @@ function toInput(draft: Draft): OnboardingInput {
     location: cleanText(draft.location),
     age: Number.isInteger(age) ? age : Number.NaN,
     gathering_size: draft.gatheringSize,
-    languages: parsedTopic(draft.languages),
-    hobbies: parsedTopic(draft.hobbies),
-    locations: parsedTopic(draft.locations),
-    interests: parsedTopic(draft.interests),
-    festivals: parsedTopic(draft.festivals),
+    languages: parsedTopic(draft.languages, draft.kept),
+    hobbies: parsedTopic(draft.hobbies, draft.kept),
+    locations: parsedTopic(draft.locations, draft.kept),
+    interests: parsedTopic(draft.interests, draft.kept),
+    festivals: parsedTopic(draft.festivals, draft.kept),
   }
 }
 
-function mergeCommaList(current: string, incoming: string[]): string {
-  return formatList(parseList(`${current},${incoming.join(",")}`))
+function mergeCommaList(current: string, incoming: string[], kept: readonly string[]): string {
+  const merged = parseListPreserving(current, kept)
+  const seen = new Set(merged.map((item) => item.toLocaleLowerCase()))
+  for (const item of incoming) {
+    const text = cleanText(item)
+    const key = text.toLocaleLowerCase()
+    if (!text || seen.has(key)) continue
+    if (merged.length >= ONBOARDING_LIMITS.list) break
+    seen.add(key)
+    merged.push(text)
+  }
+  return formatList(merged)
 }
 
-function mergeTopicDraft(current: TopicDraft, incoming: SpotifySuggestions[TopicKey]): TopicDraft {
+function withKept(kept: string[], incoming: string[]): string[] {
+  const seen = new Set(kept.map((item) => item.toLocaleLowerCase()))
+  const next = [...kept]
+  for (const item of incoming) {
+    const text = cleanText(item)
+    if (!text.includes(",") || seen.has(text.toLocaleLowerCase())) continue
+    seen.add(text.toLocaleLowerCase())
+    next.push(text)
+  }
+  return next
+}
+
+function mergeTopicDraft(
+  current: TopicDraft,
+  incoming: SpotifySuggestions[TopicKey],
+  kept: readonly string[],
+): TopicDraft {
   return {
-    knows: mergeCommaList(current.knows, incoming.knows),
-    wants: mergeCommaList(current.wants, incoming.wants_to_learn),
+    knows: mergeCommaList(current.knows, incoming.knows, kept),
+    wants: mergeCommaList(current.wants, incoming.wants_to_learn, kept),
   }
 }
 
-function spotifySummaryText(genres: string[], artists: { name: string }[]): string {
+function suggestionItems(suggestions: SpotifySuggestions): string[] {
+  const items: string[] = []
+  for (const topic of TOPIC_KEYS) {
+    items.push(...suggestions[topic].knows, ...suggestions[topic].wants_to_learn)
+  }
+  return items
+}
+
+function spotifySummaryText(genres: string[], artists: { name: string }[]): string | null {
+  const names = new Set(
+    artists.map((artist) => artist.name.trim().toLocaleLowerCase()).filter((name) => name.length > 0),
+  )
+  const namedArtists =
+    artists.length > 0 && genres.length > 0 && genres.every((genre) => names.has(genre.trim().toLocaleLowerCase()))
+  if (namedArtists) return null
   if (genres.length > 0) return `Spotify suggested: ${genres.join(", ")}`
-  const names = artists.map((artist) => artist.name.trim()).filter((name) => name.length > 0)
-  if (names.length > 0) return `Spotify suggested artists: ${names.join(", ")}`
+  const visible = artists.map((artist) => artist.name.trim()).filter((name) => name.length > 0)
+  if (visible.length > 0) return `Spotify suggested artists: ${visible.join(", ")}`
   return "Spotify did not find genres to suggest."
 }
 
@@ -204,9 +284,14 @@ export function OnboardingForm({
   const [reachKey, setReachKey] = useState(0)
   const [profileDismissed, setProfileDismissed] = useState(false)
   const [links, setLinks] = useState<Record<string, LinkStatus>>({})
+  const [spotifyGenres, setSpotifyGenres] = useState<string[]>([])
+  const [spotifyArtists, setSpotifyArtists] = useState<SpotifyArtist[]>([])
   const [spotifySummary, setSpotifySummary] = useState<string | null>(null)
   const [spotifyError, setSpotifyError] = useState<string | null>(null)
   const [spotifyBusy, setSpotifyBusy] = useState(false)
+  const [metaBusy, setMetaBusy] = useState(false)
+  const [metaSummary, setMetaSummary] = useState<string | null>(null)
+  const [metaError, setMetaError] = useState<string | null>(null)
   const onLinks = useCallback((next: Record<string, LinkStatus>) => {
     setLinks(next)
   }, [])
@@ -305,19 +390,50 @@ export function OnboardingForm({
     setSpotifyBusy(true)
     try {
       const result = await importSpotify(getToken)
-      setDraft((current) => ({
-        ...current,
-        languages: mergeTopicDraft(current.languages, result.suggestions.languages),
-        hobbies: mergeTopicDraft(current.hobbies, result.suggestions.hobbies),
-        locations: mergeTopicDraft(current.locations, result.suggestions.locations),
-        interests: mergeTopicDraft(current.interests, result.suggestions.interests),
-        festivals: mergeTopicDraft(current.festivals, result.suggestions.festivals),
-      }))
+      setDraft((current) => {
+        const kept = withKept(current.kept, suggestionItems(result.suggestions))
+        return {
+          ...current,
+          kept,
+          languages: mergeTopicDraft(current.languages, result.suggestions.languages, kept),
+          hobbies: mergeTopicDraft(current.hobbies, result.suggestions.hobbies, kept),
+          locations: mergeTopicDraft(current.locations, result.suggestions.locations, kept),
+          interests: mergeTopicDraft(current.interests, result.suggestions.interests, kept),
+          festivals: mergeTopicDraft(current.festivals, result.suggestions.festivals, kept),
+        }
+      })
+      setSpotifyGenres(result.genres)
+      setSpotifyArtists(result.artists.filter((artist) => artist.name.trim().length > 0))
       setSpotifySummary(spotifySummaryText(result.genres, result.artists))
     } catch (err) {
       setSpotifyError(err instanceof Error ? err.message : "Spotify import failed")
     } finally {
       setSpotifyBusy(false)
+    }
+  }
+
+  async function suggestFromMeta() {
+    setMetaError(null)
+    setMetaBusy(true)
+    try {
+      const result = await importMeta(getToken)
+      setDraft((current) => {
+        const incoming = [...result.suggestions.knows, ...result.suggestions.wants_to_learn]
+        const kept = withKept(current.kept, incoming)
+        return {
+          ...current,
+          kept,
+          languages: {
+            knows: mergeCommaList(current.languages.knows, result.suggestions.knows, kept),
+            wants: mergeCommaList(current.languages.wants, result.suggestions.wants_to_learn, kept),
+          },
+        }
+      })
+      setMetaSummary(`Meta suggested: ${result.languages.join(", ")}`)
+    } catch (err) {
+      setMetaError(err instanceof Error ? err.message : "Meta import failed")
+    } finally {
+      setMetaBusy(false)
     }
   }
 
@@ -360,6 +476,7 @@ export function OnboardingForm({
         />
         {profilePanel}
         <Reach getToken={getToken} refreshKey={reachKey} onLinks={onLinks} />
+        <NearbyEvents getToken={getToken} />
         <Plans getToken={getToken} />
         {extras ? (
           <details className="tickets">
@@ -375,177 +492,227 @@ export function OnboardingForm({
 
   return (
     <>
-    {profilePanel}
-    <form className="flow onboarding" onSubmit={last ? finish : goNext}>
-      <p className="step-count">
-        Step {stepIndex + 1} of {FLOW_STEPS.length}
-      </p>
-      <div className="track" aria-hidden="true">
-        {FLOW_STEPS.map((item, index) => (
-          <span
-            key={item.id}
-            className={index < stepIndex ? "done" : index === stepIndex ? "now" : undefined}
-          />
-        ))}
-      </div>
-      <h2>{step.title}</h2>
-      {step.id === "reach" ? (
-        <p className="note">
-          You choose what to share: Instagram, Discord, Snapchat, or Facebook. Nothing here is scraped.
-          Spotify comes on the next screen.
+      {profilePanel}
+      <form className="flow onboarding" onSubmit={last ? finish : goNext}>
+        <p className="step-count">
+          Step {stepIndex + 1} of {FLOW_STEPS.length}
         </p>
-      ) : null}
-      {step.id === "preferences" ? (
-        <p className="note">
-          Hobbies, places, interests, and festivals each have their own list. Separate items with
-          commas. Where you live is on the next screen.
-        </p>
-      ) : null}
-      {step.id === "about" ? (
-        <p className="note">Orbit does not pull your name or location from connected accounts.</p>
-      ) : null}
+        <ol className="steps" aria-hidden="true">
+          {FLOW_STEPS.map((item, index) => (
+            <li
+              key={item.id}
+              className={index < stepIndex ? "done" : index === stepIndex ? "now" : undefined}
+            >
+              {item.label}
+            </li>
+          ))}
+        </ol>
+        <h2>{step.title}</h2>
+        {step.id === "about" ? (
+          <p className="note">Orbit does not pull your name or city from connected accounts.</p>
+        ) : null}
+        {step.id === "reach" ? (
+          <p className="note">Usernames are optional. Add the place you actually answer.</p>
+        ) : null}
+        {step.id === "preferences" ? (
+          <p className="note">
+            Hobbies, places, interests, and festivals each have their own list. Interests from Spotify are
+            already in these lists when you asked for them. Separate items with commas.
+          </p>
+        ) : null}
 
-      {step.id === "reach" ? <ReachFields draft={contact} onChange={setContact} /> : null}
+        {step.id === "spotify" ? (
+          <div className="listen">
+            <div className="record" aria-hidden="true" />
+            <div>
+              <p>
+                Connect Spotify and we’ll suggest interests from what you listen to. Edit them on the last
+                step, or continue without connecting.
+              </p>
+              <SpotifyConnect lead />
+              <button
+                type="button"
+                className="ghost"
+                disabled={spotifyBusy}
+                onClick={() => void suggestFromSpotify()}
+              >
+                {spotifyBusy ? "Suggesting…" : "Suggest from Spotify"}
+              </button>
+              {spotifySummary ? <p className="note">{spotifySummary}</p> : null}
+              {spotifyGenres.length > 0 && spotifySummary ? (
+                <ul className="chips">
+                  {spotifyGenres.map((genre) => (
+                    <li key={genre}>{genre}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {spotifyError ? <p className="error">{spotifyError}</p> : null}
+            </div>
+            {spotifyArtists.length > 0 ? (
+              <div className="artist-shelf">
+                <p className="note shelf-label">Your top artists</p>
+                <ul className="artist-grid">
+                  {spotifyArtists.map((artist) => (
+                    <ArtistCard key={artist.name} artist={artist} />
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
-      {step.id === "preferences" ? (
-        <>
-          <label htmlFor="languages-knows">
-            {languageField.knows}
-            <input
-              id="languages-knows"
-              value={draft.languages.knows}
-              onChange={(event) => updateTopic("languages", "knows", event.target.value)}
-            />
-          </label>
-          <label htmlFor="languages-wants">
-            {languageField.wants}
-            <input
-              id="languages-wants"
-              value={draft.languages.wants}
-              onChange={(event) => updateTopic("languages", "wants", event.target.value)}
-            />
-          </label>
-          {PREFERENCE_KEYS.map((key) => {
-            const field = PROFILE_FIELDS.find((item) => item.key === key)
-            if (!field) return null
-            return (
-              <Fragment key={key}>
-                <label htmlFor={`${key}-knows`}>
-                  {field.knows}
-                  <input
-                    id={`${key}-knows`}
-                    value={draft[key].knows}
-                    onChange={(event) => updateTopic(key, "knows", event.target.value)}
-                  />
-                </label>
-                <label htmlFor={`${key}-wants`}>
-                  {field.wants}
-                  <input
-                    id={`${key}-wants`}
-                    value={draft[key].wants}
-                    onChange={(event) => updateTopic(key, "wants", event.target.value)}
-                  />
-                </label>
-              </Fragment>
-            )
-          })}
-          <button
-            type="button"
-            className="ghost"
-            disabled={spotifyBusy}
-            onClick={() => void suggestFromSpotify()}
-          >
-            {spotifyBusy ? "Suggesting…" : "Suggest from Spotify"}
-          </button>
-          {spotifySummary ? <p className="note">{spotifySummary}</p> : null}
-          {spotifyError ? <p className="error">{spotifyError}</p> : null}
-        </>
-      ) : null}
-
-      {step.id === "about" ? (
-        <>
-          <label htmlFor="username">
-            User name
-            <input
-              id="username"
-              name="username"
-              value={draft.username}
-              autoComplete="nickname"
-              onChange={(event) => setDraft((current) => ({ ...current, username: event.target.value }))}
-            />
-          </label>
-          <label htmlFor="first-name">
-            First name
-            <input
-              id="first-name"
-              name="given-name"
-              value={draft.firstName}
-              autoComplete="given-name"
-              onChange={(event) => setDraft((current) => ({ ...current, firstName: event.target.value }))}
-            />
-          </label>
-          <label htmlFor="age">
-            Age
-            <input
-              id="age"
-              name="age"
-              type="number"
-              inputMode="numeric"
-              min={ONBOARDING_LIMITS.ageMin}
-              max={ONBOARDING_LIMITS.ageMax}
-              value={draft.age}
-              onChange={(event) => setDraft((current) => ({ ...current, age: event.target.value }))}
-            />
-          </label>
-          <label htmlFor="location">
-            Location
-            <input
-              id="location"
-              name="location"
+        {step.id === "about" ? (
+          <>
+            <label htmlFor="username">
+              User name
+              <input
+                id="username"
+                name="username"
+                value={draft.username}
+                autoComplete="nickname"
+                onChange={(event) => setDraft((current) => ({ ...current, username: event.target.value }))}
+              />
+            </label>
+            <label htmlFor="first-name">
+              First name
+              <input
+                id="first-name"
+                name="given-name"
+                value={draft.firstName}
+                autoComplete="given-name"
+                onChange={(event) => setDraft((current) => ({ ...current, firstName: event.target.value }))}
+              />
+            </label>
+            <label htmlFor="age">
+              Age
+              <input
+                id="age"
+                name="age"
+                type="number"
+                inputMode="numeric"
+                min={ONBOARDING_LIMITS.ageMin}
+                max={ONBOARDING_LIMITS.ageMax}
+                value={draft.age}
+                onChange={(event) => setDraft((current) => ({ ...current, age: event.target.value }))}
+              />
+            </label>
+            <CityMap
               value={draft.location}
-              autoComplete="address-level2"
-              onChange={(event) => setDraft((current) => ({ ...current, location: event.target.value }))}
+              onChange={(location) => setDraft((current) => ({ ...current, location }))}
             />
-          </label>
-          <fieldset className="choices">
-            <legend>Group size you want</legend>
-            {GATHERING_SIZES.map((size) => (
-              <label key={size.value} className="choice">
-                <input
-                  type="radio"
-                  name="gathering-size"
-                  value={size.value}
-                  checked={draft.gatheringSize === size.value}
-                  onChange={() => setDraft((current) => ({ ...current, gatheringSize: size.value }))}
-                />
-                {size.label}
-              </label>
-            ))}
-          </fieldset>
-        </>
-      ) : null}
+            <fieldset className="choices">
+              <legend>Group size you want</legend>
+              {GATHERING_SIZES.map((size) => (
+                <label key={size.value} className="choice">
+                  <input
+                    type="radio"
+                    name="gathering-size"
+                    value={size.value}
+                    checked={draft.gatheringSize === size.value}
+                    onChange={() => setDraft((current) => ({ ...current, gatheringSize: size.value }))}
+                  />
+                  {size.label}
+                </label>
+              ))}
+            </fieldset>
+          </>
+        ) : null}
 
-      {error ? <p className="error">{error}</p> : null}
-      <div className="actions">
-        {stepIndex > 0 ? (
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => {
-              setError(null)
-              setStepIndex((current) => current - 1)
-            }}
-          >
-            Back
+        {step.id === "reach" ? <ReachFields draft={contact} onChange={setContact} /> : null}
+
+        {step.id === "preferences" ? (
+          <>
+            <label htmlFor="languages-knows">
+              {languageField.knows}
+              <input
+                id="languages-knows"
+                value={draft.languages.knows}
+                onChange={(event) => updateTopic("languages", "knows", event.target.value)}
+              />
+            </label>
+            <label htmlFor="languages-wants">
+              {languageField.wants}
+              <input
+                id="languages-wants"
+                value={draft.languages.wants}
+                onChange={(event) => updateTopic("languages", "wants", event.target.value)}
+              />
+            </label>
+            {PREFERENCE_KEYS.map((key) => {
+              const field = PROFILE_FIELDS.find((item) => item.key === key)
+              if (!field) return null
+              return (
+                <Fragment key={key}>
+                  <label htmlFor={`${key}-knows`}>
+                    {field.knows}
+                    <input
+                      id={`${key}-knows`}
+                      value={draft[key].knows}
+                      onChange={(event) => updateTopic(key, "knows", event.target.value)}
+                    />
+                  </label>
+                  {key === "interests" ? (
+                    <div className="actions">
+                      {INTEREST_STARTERS.map((interest) => (
+                        <button
+                          key={interest}
+                          type="button"
+                          className="ghost"
+                          onClick={() =>
+                            setDraft((current) => ({
+                              ...current,
+                              interests: {
+                                ...current.interests,
+                                knows: mergeCommaList(current.interests.knows, [interest], current.kept),
+                              },
+                            }))
+                          }
+                        >
+                          {interest}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <label htmlFor={`${key}-wants`}>
+                    {field.wants}
+                    <input
+                      id={`${key}-wants`}
+                      value={draft[key].wants}
+                      onChange={(event) => updateTopic(key, "wants", event.target.value)}
+                    />
+                  </label>
+                </Fragment>
+              )
+            })}
+            <button type="button" className="ghost" disabled={metaBusy} onClick={() => void suggestFromMeta()}>
+              {metaBusy ? "Suggesting…" : "Suggest languages from Meta"}
+            </button>
+            {metaSummary ? <p className="note">{metaSummary}</p> : null}
+            {metaError ? <p className="error">{metaError}</p> : null}
+          </>
+        ) : null}
+
+        {error ? <p className="error">{error}</p> : null}
+        <div className="actions">
+          {stepIndex > 0 ? (
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => {
+                setError(null)
+                setStepIndex((current) => current - 1)
+              }}
+            >
+              Back
+            </button>
+          ) : (
+            <span />
+          )}
+          <button type="submit" className="primary">
+            {last ? "Find your people" : "Next"}
           </button>
-        ) : (
-          <span />
-        )}
-        <button type="submit" className="primary">
-          {last ? "Find your people" : "Next"}
-        </button>
-      </div>
-    </form>
+        </div>
+      </form>
     </>
   )
 }

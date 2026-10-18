@@ -151,6 +151,12 @@ def test_put_onboarding_rejects_a_long_location(client):
     assert response.get_json()["error"] == "location is too long"
 
 
+def test_put_onboarding_rejects_a_city_ticketmaster_cannot_search(client):
+    response = _put(client, _profile(location="123"))
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "location must be a listed city"
+
+
 def test_put_onboarding_requires_an_age(client):
     body = _profile()
     del body["age"]

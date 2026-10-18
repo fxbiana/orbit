@@ -16,6 +16,21 @@ LOCATION_MAX_LENGTH = 80
 AGE_MIN = 13
 AGE_MAX = 120
 GATHERING_SIZES = ("2-5", "6-15", "16-40", "40+")
+# Ticketmaster city search uses this spelling. Keep web/src/onboarding.ts CITIES in sync.
+CITIES = (
+    "Seattle",
+    "Portland",
+    "San Francisco",
+    "Los Angeles",
+    "Austin",
+    "Denver",
+    "Chicago",
+    "New York",
+    "Boston",
+    "Toronto",
+    "Vancouver",
+    "London",
+)
 TOPIC_ITEM_MAX_LENGTH = 80
 TOPIC_LIST_MAX_ITEMS = 20
 
@@ -149,6 +164,14 @@ def _topic(value, name: str, spec: dict) -> dict:
     }
 
 
+def _city(body: dict) -> str:
+    text = _required_string(body, "location", ONBOARDING_SCHEMA["location"]["max_length"])
+    for city in CITIES:
+        if city.casefold() == text.casefold():
+            return city
+    abort(400, description="location must be a listed city")
+
+
 def parse_onboarding(body) -> dict:
     """Validate a request body and return the document fields to store."""
     if not isinstance(body, dict):
@@ -166,9 +189,7 @@ def parse_onboarding(body) -> dict:
         "first_name": _required_string(
             body, "first_name", ONBOARDING_SCHEMA["first_name"]["max_length"]
         ),
-        "location": _required_string(
-            body, "location", ONBOARDING_SCHEMA["location"]["max_length"]
-        ),
+        "location": _city(body),
         "age": _required_int(body, "age", ONBOARDING_SCHEMA["age"]),
         "gathering_size": _required_choice(
             body, "gathering_size", ONBOARDING_SCHEMA["gathering_size"]["enum"]

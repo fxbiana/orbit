@@ -1,6 +1,6 @@
 import { ClerkProvider, Show, SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/react"
 import { useEffect, useState } from "react"
-import { FutureExtension } from "./FutureExtension"
+import { DemoDesk } from "./DemoDesk"
 import { OnboardingForm } from "./OnboardingForm"
 import { SavePage } from "./SavePage"
 
@@ -12,6 +12,7 @@ export function App() {
       <main className="hall">
         <p className="eyebrow">Orbit</p>
         <h1>Add the Clerk publishable key to web/.env, then restart the site.</h1>
+        <SignedOutPitch />
       </main>
     )
   }
@@ -90,13 +91,21 @@ function Site() {
         </div>
       </header>
       <Show when="signed-out">
-        <Hero />
-        <FutureExtension />
+        <SignedOutPitch />
       </Show>
       <Show when="signed-in">
         <SignedIn profileOpen={profileOpen} onProfileClose={() => setProfileOpen(false)} />
       </Show>
     </div>
+  )
+}
+
+function SignedOutPitch() {
+  return (
+    <>
+      <Hero />
+      <DemoDesk />
+    </>
   )
 }
 
@@ -117,7 +126,8 @@ function Hero() {
         </div>
         <div>
           <p>They already know</p>
-          <strong>Amira · 100</strong>
+          <strong>Amira</strong>
+          <span>100 match</span>
         </div>
       </div>
     </section>

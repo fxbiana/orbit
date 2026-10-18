@@ -185,6 +185,12 @@ def test_post_plan_rejects_invalid_activity_type(client):
     assert "activity_type must be one of" in response.get_json()["error"]
 
 
+def test_post_plan_accepts_show(client):
+    response = _post_plan(client, _plan_body(activity_type="show", title="Diwali dance night"))
+    assert response.status_code == 201
+    assert response.get_json()["activity_type"] == "show"
+
+
 def test_post_plan_rejects_long_title(client):
     response = _post_plan(client, _plan_body(title="t" * 121))
     assert response.status_code == 400

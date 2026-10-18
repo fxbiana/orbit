@@ -10,7 +10,7 @@ from flask import abort
 
 TITLE_MAX_LENGTH = 120
 LOCATION_TEXT_MAX_LENGTH = 80
-ACTIVITY_TYPES = ("coffee", "study", "workshop", "other")
+ACTIVITY_TYPES = ("coffee", "study", "workshop", "show", "other")
 CAPACITY_MIN = 2
 CAPACITY_MAX = 40
 CAPACITY_DEFAULT = 6

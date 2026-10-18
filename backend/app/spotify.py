@@ -160,12 +160,35 @@ def genres_from_listening(listening: dict) -> list[str]:
 
 
 def fallback_suggestions(listening: dict) -> dict:
-    """Genre chips and festival styles when a model is not used."""
+    """Genre chips and festival styles when a model is not used.
+
+    When Spotify sends artists with no genres, interest chips use those names
+    so a taste still becomes a suggestion.
+    """
     suggestions = empty_suggestions()
     genres = genres_from_listening(listening)
-    suggestions["interests"]["knows"] = genres[:_MAX_SUGGESTIONS]
-    suggestions["festivals"]["knows"] = _festivals_for_genres(genres)
+    if genres:
+        suggestions["interests"]["knows"] = genres[:_MAX_SUGGESTIONS]
+        suggestions["festivals"]["knows"] = _festivals_for_genres(genres)
+    else:
+        suggestions["interests"]["knows"] = _names_from_listening(listening)[:_MAX_SUGGESTIONS]
     return suggestions
+
+
+def _names_from_listening(listening) -> list[str]:
+    if not isinstance(listening, dict):
+        return []
+    artists = listening.get("top_artists")
+    if not isinstance(artists, list):
+        return []
+    names: list[str] = []
+    for artist in artists:
+        if not isinstance(artist, dict):
+            continue
+        name = artist.get("name")
+        if isinstance(name, str):
+            names.append(name)
+    return _clean_suggestion_list(names, "interests")
 
 
 def suggest_from_listening(
@@ -512,15 +535,49 @@ def _genre_names(artist: dict) -> list[str]:
     return names
 
 
+def _portrait_url(artist: dict) -> str | None:
+    """Pick a mid-size https image. Spotify lists the largest first."""
+    images = artist.get("images")
+    if not isinstance(images, list):
+        return None
+    best_url = None
+    best_score = None
+    best_width = None
+    for image in images:
+        if not isinstance(image, dict):
+            continue
+        url = image.get("url")
+        if not isinstance(url, str) or not url.startswith("https://"):
+            continue
+        width = image.get("width") if isinstance(image.get("width"), int) else 640
+        score = abs(width - 320)
+        if best_score is None or score < best_score or (score == best_score and width > (best_width or 0)):
+            best_url = url
+            best_score = score
+            best_width = width
+    return best_url
+
+
 def _top_artists(payload) -> list[dict]:
     artists: list[dict] = []
+    seen: set[str] = set()
     for artist in _artist_list(payload):
         if not isinstance(artist, dict):
             continue
         name = _named(artist.get("name"))
         if not name:
             continue
-        artists.append({"name": name, "genres": _genre_names(artist)})
+        key = name.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        artists.append(
+            {
+                "name": name,
+                "genres": _genre_names(artist),
+                "image_url": _portrait_url(artist),
+            }
+        )
         if len(artists) >= _MAX_TOP_ARTISTS:
             break
     return artists

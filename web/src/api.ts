@@ -44,6 +44,23 @@ async function request<T>(path: string, token: string, init?: RequestInit): Prom
   return response.json() as Promise<T>
 }
 
+export type NearbyEvent = {
+  title: string
+  venue: string
+  city: string
+  starts_at: string | null
+  external_source: string
+  external_id: string
+  url: string
+}
+
+export function listNearbyEvents(token: string) {
+  return request<{ city: string; preferences: string[]; events: NearbyEvent[] }>(
+    "/api/events/nearby",
+    token,
+  )
+}
+
 export function listTickets(token: string) {
   return request<{ tickets: Ticket[] }>("/api/tickets", token)
 }
@@ -87,7 +104,7 @@ export function listMatches(token: string, limit = 10) {
   return request<{ matches: Match[] }>(`/api/matches?${query}`, token)
 }
 
-export const ACTIVITY_TYPES = ["coffee", "study", "workshop", "other"] as const
+export const ACTIVITY_TYPES = ["coffee", "study", "workshop", "show", "other"] as const
 
 export type ActivityType = (typeof ACTIVITY_TYPES)[number]
 
@@ -135,6 +152,17 @@ export function joinPlan(token: string, planId: string) {
     method: "POST",
     body: "{}",
   })
+}
+
+/** Ranked other members. A 404 means the viewer has no onboarding profile. */
+export async function listPlanMatches(token: string, planId: string): Promise<Match[] | null> {
+  const response = await fetch(`${apiBase()}/api/plans/${encodeURIComponent(planId)}/matches`, {
+    headers: authHeaders(token),
+  })
+  if (response.status === 404) return null
+  if (!response.ok) throw new Error(await errorMessage(response))
+  const body = (await response.json()) as { matches?: Match[] }
+  return body.matches ?? []
 }
 
 export const CONTACT_CHANNELS = ["instagram", "discord", "snapchat", "facebook"] as const

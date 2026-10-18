@@ -67,4 +67,25 @@ it("shows the four closest people and pages through the rest", async () => {
 
   expect(screen.getByRole("heading", { name: "Ada" })).toBeInTheDocument()
   expect(screen.queryByRole("heading", { name: "Eve" })).not.toBeInTheDocument()
+  expect(screen.getByText(/highest score first/)).toBeInTheDocument()
+  expect(screen.getByText(/Showing 1-4 of 6/)).toBeInTheDocument()
+  expect(screen.queryByText(/40 points/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/up to 100/)).not.toBeInTheDocument()
+})
+
+it("leads with the first Knows overlap, not a later dance match", async () => {
+  vi.mocked(listMatches).mockResolvedValue({
+    matches: [
+      {
+        ...person("Anika", 80),
+        matched_on: ["Knows Hindi", "Knows Dance"],
+      },
+    ],
+  })
+
+  render(<Matches viewer={viewer} getToken={async () => "session-token"} />)
+
+  expect(await screen.findByText("Knows Hindi. You want to learn it.")).toBeInTheDocument()
+  expect(screen.queryByText("Knows Dance. You want to learn it.")).not.toBeInTheDocument()
+  expect(screen.queryByText(/40 points/)).not.toBeInTheDocument()
 })

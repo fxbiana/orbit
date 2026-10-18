@@ -3,7 +3,7 @@ import { sessionToken } from "./api"
 const apiBase = () =>
   (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "")
 
-export type SpotifyArtist = { name: string; genres: string[] }
+export type SpotifyArtist = { name: string; genres: string[]; imageUrl: string | null }
 export type SpotifyTrack = { name: string; artists: string[] }
 export type SpotifyTopic = { knows: string[]; wants_to_learn: string[] }
 export type SpotifySuggestions = {
@@ -55,9 +55,14 @@ function artistsOf(value: unknown): SpotifyArtist[] {
   for (const item of value) {
     if (!item || typeof item !== "object" || Array.isArray(item)) continue
     const record = item as Record<string, unknown>
+    if (typeof record.name !== "string") continue
+    const name = record.name.trim()
+    if (!name) continue
+    const image = record.image_url
     artists.push({
-      name: typeof record.name === "string" ? record.name : "",
+      name,
       genres: strings(record.genres),
+      imageUrl: typeof image === "string" && image.startsWith("https://") ? image : null,
     })
   }
   return artists

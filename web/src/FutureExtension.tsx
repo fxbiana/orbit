@@ -8,6 +8,7 @@ export function FutureExtension() {
           <li>Uses the same account as Orbit on the web.</li>
           <li>Reads the title and URL of the tab you have open.</li>
           <li>Saves that page to your list.</li>
+          <li>Later, asks the same API for Ticketmaster events near you that match your saved preferences.</li>
         </ol>
       </div>
       <article className="popup-sample" aria-label="Sample of the future extension popup">

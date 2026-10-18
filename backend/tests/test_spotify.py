@@ -307,8 +307,8 @@ def test_fetch_listening_reads_recent_and_short_term():
             {"name": "Glue", "artists": ["Bicep"], "album": "Bicep"}
         ],
         "top_artists": [
-            {"name": "Four Tet", "genres": ["electronica"]},
-            {"name": "No Genres", "genres": []},
+            {"name": "Four Tet", "genres": ["electronica"], "image_url": None},
+            {"name": "No Genres", "genres": [], "image_url": None},
         ],
     }
     urls = [item["url"] for item in captured]
@@ -355,8 +355,44 @@ def test_fetch_listening_falls_back_to_medium_term_when_short_term_empty():
         "top_tracks": [
             {"name": "Glue", "artists": ["Bicep"], "album": "Bicep"}
         ],
-        "top_artists": [{"name": "Four Tet", "genres": ["electronica"]}],
+        "top_artists": [{"name": "Four Tet", "genres": ["electronica"], "image_url": None}],
     }
+
+
+def test_fetch_listening_keeps_a_midsize_https_portrait():
+    captured = []
+    opener = _json_opener(
+        {
+            _RECENT_URL: {"items": []},
+            _TOP_TRACKS_SHORT_URL: {"items": [{"name": "Glue", "artists": [{"name": "Bicep"}]}]},
+            _TOP_ARTISTS_SHORT_URL: {
+                "items": [
+                    {
+                        "name": "Steve Lacy",
+                        "genres": [],
+                        "images": [
+                            {"url": "https://i.scdn.co/image/large", "width": 640},
+                            {"url": "https://i.scdn.co/image/mid", "width": 320},
+                            {"url": "https://i.scdn.co/image/small", "width": 160},
+                            {"url": "http://evil.test/x", "width": 320},
+                        ],
+                    },
+                    {"name": "Steve Lacy", "genres": [], "images": []},
+                ]
+            },
+        },
+        captured,
+    )
+
+    result = fetch_listening("spotify-token", opener=opener)
+
+    assert result["top_artists"] == [
+        {
+            "name": "Steve Lacy",
+            "genres": [],
+            "image_url": "https://i.scdn.co/image/mid",
+        }
+    ]
 
 
 def test_fetch_listening_http_error():
@@ -459,6 +495,22 @@ def test_fallback_suggestions_maps_genres_to_festivals():
     assert result["festivals"]["wants_to_learn"] == []
     assert result["locations"]["wants_to_learn"] == []
     assert result["locations"]["knows"] == []
+
+
+def test_fallback_suggestions_uses_artist_names_when_genres_are_empty():
+    listening = {
+        "top_artists": [
+            {"name": "Steve Lacy", "genres": []},
+            {"name": "Tyler, The Creator", "genres": []},
+            {"name": "steve lacy", "genres": []},
+            "not-a-dict",
+        ]
+    }
+    result = fallback_suggestions(listening)
+
+    assert result["interests"]["knows"] == ["Steve Lacy", "Tyler, The Creator"]
+    assert result["interests"]["wants_to_learn"] == []
+    assert result["festivals"]["knows"] == []
 
 
 def test_fallback_suggestions_matches_whole_words_only():
