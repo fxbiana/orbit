@@ -67,7 +67,7 @@ Product decisions locked in `AGENTS.md`: website owns the brain; extension is ca
 - [ ] Filter matches by shared event intent  
 - [ ] Ticketmaster (or similar) ingest into the same event shape  
 - [ ] Connect request → accept (consent edge ≠ match score)  
-- [ ] Optional Spotify genre chips into `interests` (user confirm)  
+- [x] Spotify listening suggests topic chips; the user confirms before save  
 - [ ] Extension prompts on event-like pages after attendance APIs exist  
 
 ---

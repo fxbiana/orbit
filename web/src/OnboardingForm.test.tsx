@@ -124,10 +124,12 @@ it("asks how to be reached first and again from the profile", async () => {
 
   expect(screen.getByRole("heading", { name: "Your preferences" })).toBeInTheDocument()
   expect(screen.getByLabelText("Languages you speak")).toHaveValue("English")
-  expect(screen.getByLabelText("Preferences you already have")).toHaveValue("Cooking, Seattle, Diwali")
-  expect(screen.getByLabelText("Preferences you want")).toHaveValue("Dance")
+  expect(screen.getByLabelText("Hobbies you do")).toHaveValue("Cooking")
+  expect(screen.getByLabelText("Hobbies you want to try")).toHaveValue("Dance")
+  expect(screen.getByLabelText("Places you know")).toHaveValue("Seattle")
+  expect(screen.getByLabelText("Festivals you know")).toHaveValue("Diwali")
+  expect(screen.getByLabelText("Interests you have")).toHaveValue("")
   expect(screen.queryByLabelText("Location")).not.toBeInTheDocument()
-  expect(screen.queryByLabelText("Hobbies you do")).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
 
   expect(screen.getByRole("heading", { name: "About you" })).toBeInTheDocument()
@@ -149,10 +151,10 @@ it("asks how to be reached first and again from the profile", async () => {
     expect.objectContaining({
       location: "Seattle",
       languages: { knows: ["English"], wants_to_learn: [] },
-      interests: { knows: ["Cooking", "Seattle", "Diwali"], wants_to_learn: ["Dance"] },
-      hobbies: { knows: [], wants_to_learn: [] },
-      locations: { knows: [], wants_to_learn: [] },
-      festivals: { knows: [], wants_to_learn: [] },
+      hobbies: { knows: ["Cooking"], wants_to_learn: ["Dance"] },
+      locations: { knows: ["Seattle"], wants_to_learn: [] },
+      festivals: { knows: ["Diwali"], wants_to_learn: [] },
+      interests: { knows: [], wants_to_learn: [] },
     }),
   )
 })
@@ -184,7 +186,7 @@ it("starts a blank form when this account has no profile", async () => {
   expect(screen.getByLabelText("Location")).toHaveValue("")
 })
 
-it("merges Spotify suggestions into grouped preferences and leaves about fields alone", async () => {
+it("merges Spotify suggestions into each topic and leaves about fields alone", async () => {
   vi.mocked(getOnboarding).mockResolvedValue(null)
   vi.stubGlobal(
     "fetch",
@@ -192,7 +194,17 @@ it("merges Spotify suggestions into grouped preferences and leaves about fields 
       ok: true,
       json: async () => ({
         genres: ["jazz", "indie"],
-        suggestions: { knows: ["Jazz", "cooking"], wants_to_learn: ["Tabla"] },
+        artists: [{ name: "Miles Davis", genres: ["jazz"] }],
+        tracks: [{ name: "So What", artists: ["Miles Davis"] }],
+        top_tracks: [{ name: "Ignored", artists: ["Nobody"] }],
+        model: null,
+        suggestions: {
+          languages: { knows: ["Spanish"], wants_to_learn: [] },
+          interests: { knows: ["Jazz"], wants_to_learn: [] },
+          hobbies: { knows: [], wants_to_learn: ["Tabla"] },
+          festivals: { knows: ["Jazz"], wants_to_learn: [] },
+          locations: { knows: [], wants_to_learn: ["Berlin"] },
+        },
         location: "Seattle",
         username: "hacked",
         first_name: "Nope",
@@ -204,14 +216,17 @@ it("merges Spotify suggestions into grouped preferences and leaves about fields 
 
   expect(await screen.findByRole("heading", { name: "How you want to be reached" })).toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
-  fireEvent.change(screen.getByLabelText("Preferences you already have"), {
-    target: { value: "Cooking, Diwali" },
-  })
+  fireEvent.change(screen.getByLabelText("Hobbies you do"), { target: { value: "Cooking" } })
+  fireEvent.change(screen.getByLabelText("Festivals you know"), { target: { value: "Diwali" } })
   fireEvent.click(screen.getByRole("button", { name: "Suggest from Spotify" }))
 
   expect(await screen.findByText("Spotify suggested: jazz, indie")).toBeInTheDocument()
-  expect(screen.getByLabelText("Preferences you already have")).toHaveValue("Cooking, Diwali, Jazz")
-  expect(screen.getByLabelText("Preferences you want")).toHaveValue("Tabla")
+  expect(screen.getByLabelText("Hobbies you do")).toHaveValue("Cooking")
+  expect(screen.getByLabelText("Hobbies you want to try")).toHaveValue("Tabla")
+  expect(screen.getByLabelText("Places you want to learn about")).toHaveValue("Berlin")
+  expect(screen.getByLabelText("Interests you have")).toHaveValue("Jazz")
+  expect(screen.getByLabelText("Festivals you know")).toHaveValue("Diwali, Jazz")
+  expect(screen.getByLabelText("Languages you speak")).toHaveValue("Spanish")
   expect(fetch).toHaveBeenCalledWith(
     "http://localhost:5000/api/spotify/import",
     expect.objectContaining({
@@ -241,12 +256,10 @@ it("keeps typed preferences when Spotify import fails", async () => {
 
   expect(await screen.findByRole("heading", { name: "How you want to be reached" })).toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
-  fireEvent.change(screen.getByLabelText("Preferences you already have"), {
-    target: { value: "Cooking" },
-  })
+  fireEvent.change(screen.getByLabelText("Hobbies you do"), { target: { value: "Cooking" } })
   fireEvent.click(screen.getByRole("button", { name: "Suggest from Spotify" }))
 
   expect(await screen.findByText("Connect Spotify first")).toBeInTheDocument()
-  expect(screen.getByLabelText("Preferences you already have")).toHaveValue("Cooking")
-  expect(screen.getByLabelText("Preferences you already have")).toBeEnabled()
+  expect(screen.getByLabelText("Hobbies you do")).toHaveValue("Cooking")
+  expect(screen.getByLabelText("Hobbies you do")).toBeEnabled()
 })

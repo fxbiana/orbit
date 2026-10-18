@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useCallback, useEffect, useState } from "react"
+import { FormEvent, Fragment, ReactNode, useCallback, useEffect, useState } from "react"
 import { getContact, getOnboarding, saveContact, saveOnboarding, sessionToken } from "./api"
 import { Matches } from "./Matches"
 import { Plans } from "./Plans"
@@ -15,19 +15,18 @@ import {
   FLOW_STEPS,
   GATHERING_SIZES,
   ONBOARDING_LIMITS,
-  PREFERENCE_GROUP_LABELS,
   PROFILE_FIELDS,
   cleanText,
   formatList,
   parseList,
-  unionGrouped,
   validateFlowStep,
   validateOnboarding,
   type FlowStepId,
   type Knowledge,
   type OnboardingInput,
+  type TopicKey,
 } from "./onboarding"
-import { importSpotify } from "./spotify"
+import { importSpotify, type SpotifySuggestions } from "./spotify"
 
 type TopicDraft = { knows: string; wants: string }
 
@@ -38,8 +37,13 @@ type Draft = {
   age: string
   gatheringSize: string
   languages: TopicDraft
-  preferences: TopicDraft
+  hobbies: TopicDraft
+  locations: TopicDraft
+  interests: TopicDraft
+  festivals: TopicDraft
 }
+
+const PREFERENCE_KEYS = ["hobbies", "locations", "interests", "festivals"] as const satisfies readonly TopicKey[]
 
 const EMPTY_CONTACT: ContactDraft = {
   instagram: "",
@@ -52,8 +56,22 @@ const EMPTY_CONTACT: ContactDraft = {
 
 const languageField = PROFILE_FIELDS.find((field) => field.key === "languages") ?? PROFILE_FIELDS[0]
 
-function emptyKnowledge(): Knowledge {
-  return { knows: [], wants_to_learn: [] }
+function emptyTopic(): TopicDraft {
+  return { knows: "", wants: "" }
+}
+
+function topicText(topic: Knowledge): TopicDraft {
+  return {
+    knows: formatList(topic.knows),
+    wants: formatList(topic.wants_to_learn),
+  }
+}
+
+function parsedTopic(topic: TopicDraft): Knowledge {
+  return {
+    knows: parseList(topic.knows),
+    wants_to_learn: parseList(topic.wants),
+  }
 }
 
 function emptyDraft(): Draft {
@@ -63,8 +81,11 @@ function emptyDraft(): Draft {
     location: "",
     age: "",
     gatheringSize: "",
-    languages: { knows: "", wants: "" },
-    preferences: { knows: "", wants: "" },
+    languages: emptyTopic(),
+    hobbies: emptyTopic(),
+    locations: emptyTopic(),
+    interests: emptyTopic(),
+    festivals: emptyTopic(),
   }
 }
 
@@ -75,14 +96,11 @@ function draftFromProfile(profile: OnboardingInput): Draft {
     location: profile.location,
     age: String(profile.age),
     gatheringSize: profile.gathering_size,
-    languages: {
-      knows: formatList(profile.languages.knows),
-      wants: formatList(profile.languages.wants_to_learn),
-    },
-    preferences: {
-      knows: formatList(unionGrouped(profile, "knows")),
-      wants: formatList(unionGrouped(profile, "wants_to_learn")),
-    },
+    languages: topicText(profile.languages),
+    hobbies: topicText(profile.hobbies),
+    locations: topicText(profile.locations),
+    interests: topicText(profile.interests),
+    festivals: topicText(profile.festivals),
   }
 }
 
@@ -95,22 +113,30 @@ function toInput(draft: Draft): OnboardingInput {
     location: cleanText(draft.location),
     age: Number.isInteger(age) ? age : Number.NaN,
     gathering_size: draft.gatheringSize,
-    languages: {
-      knows: parseList(draft.languages.knows),
-      wants_to_learn: parseList(draft.languages.wants),
-    },
-    hobbies: emptyKnowledge(),
-    locations: emptyKnowledge(),
-    interests: {
-      knows: parseList(draft.preferences.knows),
-      wants_to_learn: parseList(draft.preferences.wants),
-    },
-    festivals: emptyKnowledge(),
+    languages: parsedTopic(draft.languages),
+    hobbies: parsedTopic(draft.hobbies),
+    locations: parsedTopic(draft.locations),
+    interests: parsedTopic(draft.interests),
+    festivals: parsedTopic(draft.festivals),
   }
 }
 
 function mergeCommaList(current: string, incoming: string[]): string {
   return formatList(parseList(`${current},${incoming.join(",")}`))
+}
+
+function mergeTopicDraft(current: TopicDraft, incoming: SpotifySuggestions[TopicKey]): TopicDraft {
+  return {
+    knows: mergeCommaList(current.knows, incoming.knows),
+    wants: mergeCommaList(current.wants, incoming.wants_to_learn),
+  }
+}
+
+function spotifySummaryText(genres: string[], artists: { name: string }[]): string {
+  if (genres.length > 0) return `Spotify suggested: ${genres.join(", ")}`
+  const names = artists.map((artist) => artist.name.trim()).filter((name) => name.length > 0)
+  if (names.length > 0) return `Spotify suggested artists: ${names.join(", ")}`
+  return "Spotify did not find genres to suggest."
 }
 
 function ProfilePanel({
@@ -251,17 +277,10 @@ export function OnboardingForm({
     return <p className="note">Loading your profile...</p>
   }
 
-  function updateLanguages(side: keyof TopicDraft, value: string) {
+  function updateTopic(key: TopicKey, side: keyof TopicDraft, value: string) {
     setDraft((current) => ({
       ...current,
-      languages: { ...current.languages, [side]: value },
-    }))
-  }
-
-  function updatePreferences(side: keyof TopicDraft, value: string) {
-    setDraft((current) => ({
-      ...current,
-      preferences: { ...current.preferences, [side]: value },
+      [key]: { ...current[key], [side]: value },
     }))
   }
 
@@ -288,12 +307,13 @@ export function OnboardingForm({
       const result = await importSpotify(getToken)
       setDraft((current) => ({
         ...current,
-        preferences: {
-          knows: mergeCommaList(current.preferences.knows, result.suggestions.knows),
-          wants: mergeCommaList(current.preferences.wants, result.suggestions.wants_to_learn),
-        },
+        languages: mergeTopicDraft(current.languages, result.suggestions.languages),
+        hobbies: mergeTopicDraft(current.hobbies, result.suggestions.hobbies),
+        locations: mergeTopicDraft(current.locations, result.suggestions.locations),
+        interests: mergeTopicDraft(current.interests, result.suggestions.interests),
+        festivals: mergeTopicDraft(current.festivals, result.suggestions.festivals),
       }))
-      setSpotifySummary(`Spotify suggested: ${result.genres.join(", ")}`)
+      setSpotifySummary(spotifySummaryText(result.genres, result.artists))
     } catch (err) {
       setSpotifyError(err instanceof Error ? err.message : "Spotify import failed")
     } finally {
@@ -377,8 +397,8 @@ export function OnboardingForm({
       ) : null}
       {step.id === "preferences" ? (
         <p className="note">
-          Hobbies, places, interests, and festivals go in one list. Separate items with commas. Where
-          you live is on the next screen.
+          Hobbies, places, interests, and festivals each have their own list. Separate items with
+          commas. Where you live is on the next screen.
         </p>
       ) : null}
       {step.id === "about" ? (
@@ -394,7 +414,7 @@ export function OnboardingForm({
             <input
               id="languages-knows"
               value={draft.languages.knows}
-              onChange={(event) => updateLanguages("knows", event.target.value)}
+              onChange={(event) => updateTopic("languages", "knows", event.target.value)}
             />
           </label>
           <label htmlFor="languages-wants">
@@ -402,25 +422,33 @@ export function OnboardingForm({
             <input
               id="languages-wants"
               value={draft.languages.wants}
-              onChange={(event) => updateLanguages("wants", event.target.value)}
+              onChange={(event) => updateTopic("languages", "wants", event.target.value)}
             />
           </label>
-          <label htmlFor="preferences-knows">
-            {PREFERENCE_GROUP_LABELS.knows}
-            <input
-              id="preferences-knows"
-              value={draft.preferences.knows}
-              onChange={(event) => updatePreferences("knows", event.target.value)}
-            />
-          </label>
-          <label htmlFor="preferences-wants">
-            {PREFERENCE_GROUP_LABELS.wants}
-            <input
-              id="preferences-wants"
-              value={draft.preferences.wants}
-              onChange={(event) => updatePreferences("wants", event.target.value)}
-            />
-          </label>
+          {PREFERENCE_KEYS.map((key) => {
+            const field = PROFILE_FIELDS.find((item) => item.key === key)
+            if (!field) return null
+            return (
+              <Fragment key={key}>
+                <label htmlFor={`${key}-knows`}>
+                  {field.knows}
+                  <input
+                    id={`${key}-knows`}
+                    value={draft[key].knows}
+                    onChange={(event) => updateTopic(key, "knows", event.target.value)}
+                  />
+                </label>
+                <label htmlFor={`${key}-wants`}>
+                  {field.wants}
+                  <input
+                    id={`${key}-wants`}
+                    value={draft[key].wants}
+                    onChange={(event) => updateTopic(key, "wants", event.target.value)}
+                  />
+                </label>
+              </Fragment>
+            )
+          })}
           <button
             type="button"
             className="ghost"
