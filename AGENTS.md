@@ -4,7 +4,7 @@ Chrome extension that saves the active tab as a ticket. The popup is React. The 
 
 ## Product decisions (locked)
 
-These decisions are locked for planning and implementation. Change them only with an explicit product decision, not casually in a feature PR.
+These decisions are locked for planning and implementation. Change them only with an explicit product decision, not casually in a feature PR. Schema paths, additive collections, and workflows for the next layers: [`docs/SCHEMA_AND_WORKFLOW.md`](docs/SCHEMA_AND_WORKFLOW.md).
 
 ### North star and horizons
 
