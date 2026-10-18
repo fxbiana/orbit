@@ -2,6 +2,7 @@ import { FormEvent, ReactNode, useEffect, useState } from "react"
 import { getOnboarding, saveOnboarding, sessionToken } from "./api"
 import { Matches } from "./Matches"
 import { Plans } from "./Plans"
+import { SpotifyImport } from "./SpotifyImport"
 import {
   FLOW_STEPS,
   GATHERING_SIZES,
@@ -160,6 +161,7 @@ export function OnboardingForm({
     return (
       <div className="flow">
         <Matches viewer={viewer} getToken={getToken} />
+        <SpotifyImport getToken={getToken} />
         <Plans getToken={getToken} />
         {saveError ? <p className="error">Profile was not saved. {saveError}</p> : null}
         <div className="actions">

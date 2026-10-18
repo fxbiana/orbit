@@ -12,6 +12,7 @@ from werkzeug.exceptions import HTTPException
 from app.config import ROOT
 from app.onboarding import onboarding_response
 from app.plans import member_response, plan_response
+from app.spotify import SPOTIFY_SOURCE, spotify_response
 
 log = logging.getLogger(__name__)
 _firestore = None
@@ -172,6 +173,53 @@ def save_onboarding(clerk_user_id: str, profile: dict) -> tuple[dict, bool]:
         log.exception("Firestore onboarding write failed")
         abort(503, description="Firestore request failed")
     return onboarding_response(clerk_user_id, payload, _iso), created
+
+
+def _spotify(clerk_user_id: str):
+    return (
+        firestore_client()
+        .collection("users")
+        .document(clerk_user_id)
+        .collection("profile")
+        .document("spotify")
+    )
+
+
+def get_spotify(clerk_user_id: str) -> dict | None:
+    """Read the caller's persisted Spotify taste snapshot."""
+    try:
+        snap = _spotify(clerk_user_id).get()
+        if not snap.exists:
+            return None
+        data = snap.to_dict() or {}
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Firestore spotify read failed")
+        abort(503, description="Firestore request failed")
+    return spotify_response(clerk_user_id, data, _iso)
+
+
+def save_spotify(clerk_user_id: str, analysis: dict) -> dict:
+    """Persist Spotify analysis under the caller. Never stores OAuth tokens."""
+    now = datetime.now(timezone.utc)
+    payload = {
+        "user_id": clerk_user_id,
+        "genres": list(analysis.get("genres") or []),
+        "suggested_interests": analysis.get("suggested_interests")
+        or {"knows": list(analysis.get("genres") or []), "wants_to_learn": []},
+        "source": SPOTIFY_SOURCE,
+        "artist_count": int(analysis.get("artist_count") or 0),
+        "imported_at": now,
+    }
+    try:
+        _spotify(clerk_user_id).set(payload)
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Firestore spotify write failed")
+        abort(503, description="Firestore request failed")
+    return spotify_response(clerk_user_id, payload, _iso)
 
 
 def _user_id_from_onboarding_snap(snap) -> str | None:
