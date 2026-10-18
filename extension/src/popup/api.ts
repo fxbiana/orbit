@@ -1,3 +1,4 @@
+import { shapeInviteSummaries, type InviteSummary } from "../invites"
 import type { OnboardingInput, OnboardingProfile } from "./onboarding"
 
 const apiBase = () =>
@@ -47,6 +48,18 @@ async function request<T>(path: string, token: string, init?: RequestInit): Prom
   })
   if (!response.ok) throw new Error(await errorMessage(response))
   return response.json() as Promise<T>
+}
+
+export async function listInboxInvites(token: string): Promise<InviteSummary[]> {
+  try {
+    const response = await fetch(`${apiBase()}/api/invites?box=inbox`, {
+      headers: authHeaders(token),
+    })
+    if (!response.ok) return []
+    return shapeInviteSummaries(await response.json())
+  } catch {
+    return []
+  }
 }
 
 export function listTickets(token: string) {
