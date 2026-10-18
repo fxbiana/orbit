@@ -1,3 +1,4 @@
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import Mock
@@ -160,6 +161,42 @@ def test_firestore_client_initializes_once_when_admin_is_missing(monkeypatch, tm
     initialize_app.assert_called_once()
     certificate_path = initialize_app.call_args.args[0]["path"]
     assert certificate_path == str(credentials_file)
+
+
+def test_concurrent_callers_initialize_admin_once(monkeypatch, tmp_path):
+    credentials_file = tmp_path / "service-account.json"
+    credentials_file.write_text("{}")
+    monkeypatch.setattr("app.firebase._firestore", None)
+    started = threading.Barrier(2)
+    initialize_app = Mock()
+    monkeypatch.setattr(
+        "app.firebase.firebase_admin.get_app",
+        Mock(side_effect=ValueError("no app")),
+    )
+    monkeypatch.setattr("app.firebase.firebase_admin.initialize_app", initialize_app)
+    monkeypatch.setattr("app.firebase.credentials.Certificate", lambda path: {"path": path})
+    client = object()
+    monkeypatch.setattr("app.firebase.firestore.client", lambda: client)
+
+    app = _app_with_credentials(str(credentials_file))
+    errors = []
+
+    def call():
+        try:
+            with app.app_context():
+                started.wait(timeout=2)
+                assert firestore_client() is client
+        except Exception as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=call) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    initialize_app.assert_called_once()
 
 
 def test_firestore_client_aborts_when_admin_init_fails(monkeypatch, tmp_path):

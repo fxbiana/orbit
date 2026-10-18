@@ -8,7 +8,7 @@ import {
 } from "@clerk/chrome-extension"
 import { useEffect, useState } from "react"
 import { readActiveTab } from "../tabs"
-import { createTicket, listTickets, type Ticket } from "./api"
+import { createTicket, listTickets, sessionToken, type Ticket } from "./api"
 import { OnboardingForm } from "./OnboardingForm"
 
 export function App() {
@@ -78,12 +78,14 @@ function SignedInApp() {
     <>
       {error ? <p className="error">{error}</p> : null}
       {!token && !error ? <p>Loading...</p> : null}
-      {token ? <OnboardingForm token={token} extras={<TicketPanel token={token} />} /> : null}
+      {token ? (
+        <OnboardingForm getToken={getToken} extras={<TicketPanel getToken={getToken} />} />
+      ) : null}
     </>
   )
 }
 
-export function TicketPanel({ token }: { token: string }) {
+export function TicketPanel({ getToken }: { getToken: () => Promise<string | null> }) {
   const [tab, setTab] = useState<{ title: string; url: string } | null>(null)
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -100,7 +102,8 @@ export function TicketPanel({ token }: { token: string }) {
         if (!cancelled) setError(err.message)
       })
 
-    listTickets(token)
+    sessionToken(getToken)
+      .then((fresh) => listTickets(fresh))
       .then((body) => {
         if (!cancelled) setTickets(body.tickets)
       })
@@ -111,15 +114,16 @@ export function TicketPanel({ token }: { token: string }) {
     return () => {
       cancelled = true
     }
-  }, [token])
+  }, [getToken])
 
   async function save() {
     if (!tab) return
     setSaving(true)
     setError(null)
     try {
-      await createTicket(token, tab)
-      const body = await listTickets(token)
+      const fresh = await sessionToken(getToken)
+      await createTicket(fresh, tab)
+      const body = await listTickets(fresh)
       setTickets(body.tickets)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed")

@@ -1,4 +1,5 @@
 import logging
+import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,6 +14,7 @@ from app.onboarding import onboarding_response
 
 log = logging.getLogger(__name__)
 _firestore = None
+_init_lock = threading.Lock()
 
 
 def _credentials_path() -> str:
@@ -38,22 +40,26 @@ def firestore_client():
     if _firestore is not None:
         return _firestore
 
-    path = _credentials_path()
-    if not path:
-        abort(503, description="FIREBASE_CREDENTIALS_PATH is not configured")
-    credentials_file = _resolve_credentials_path(path)
-    if not credentials_file.is_file():
-        abort(503, description=f"Firebase credentials file not found: {path}")
+    with _init_lock:
+        if _firestore is not None:
+            return _firestore
 
-    try:
+        path = _credentials_path()
+        if not path:
+            abort(503, description="FIREBASE_CREDENTIALS_PATH is not configured")
+        credentials_file = _resolve_credentials_path(path)
+        if not credentials_file.is_file():
+            abort(503, description=f"Firebase credentials file not found: {path}")
+
         try:
-            firebase_admin.get_app()
-        except ValueError:
-            firebase_admin.initialize_app(credentials.Certificate(str(credentials_file)))
-        _firestore = firestore.client()
-    except Exception:
-        log.exception("Firebase Admin failed to initialize")
-        abort(503, description="Firebase Admin could not initialize")
+            try:
+                firebase_admin.get_app()
+            except ValueError:
+                firebase_admin.initialize_app(credentials.Certificate(str(credentials_file)))
+            _firestore = firestore.client()
+        except Exception:
+            log.exception("Firebase Admin failed to initialize")
+            abort(503, description="Firebase Admin could not initialize")
 
     current_app.logger.info("Firestore client ready")
     return _firestore

@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useState } from "react"
-import { saveOnboarding } from "./api"
+import { saveOnboarding, sessionToken } from "./api"
 import { Matches } from "./Matches"
 import {
   FLOW_STEPS,
@@ -66,7 +66,13 @@ function toInput(draft: Draft): OnboardingInput {
   return input
 }
 
-export function OnboardingForm({ token, extras }: { token: string; extras?: ReactNode }) {
+export function OnboardingForm({
+  getToken,
+  extras,
+}: {
+  getToken: () => Promise<string | null>
+  extras?: ReactNode
+}) {
   const [draft, setDraft] = useState<Draft>(() => draftFromProfile(VIEWER_PROFILE))
   const [stepIndex, setStepIndex] = useState(0)
   const [phase, setPhase] = useState<"pages" | "people">("pages")
@@ -114,7 +120,7 @@ export function OnboardingForm({ token, extras }: { token: string; extras?: Reac
     setSaveError(null)
     setPhase("people")
     try {
-      await saveOnboarding(token, input)
+      await saveOnboarding(await sessionToken(getToken), input)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Save failed")
     }

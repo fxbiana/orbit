@@ -21,6 +21,12 @@ async function errorMessage(response: Response): Promise<string> {
   return `${response.status}`
 }
 
+export async function sessionToken(getToken: () => Promise<string | null>): Promise<string> {
+  const token = await getToken()
+  if (!token) throw new Error("No session token")
+  return token
+}
+
 function authHeaders(token: string, extra?: HeadersInit): HeadersInit {
   return {
     Authorization: `Bearer ${token}`,
