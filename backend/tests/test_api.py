@@ -32,6 +32,38 @@ def test_onboarding_requires_a_user_id(client):
     assert write.get_json()["error"] == "X-User-Id is required"
 
 
+def test_matches_requires_a_user_id(client):
+    response = client.get("/api/matches")
+    assert response.status_code == 401
+    assert response.get_json()["error"] == "X-User-Id is required"
+
+
+def test_plans_require_a_user_id(client):
+    listing = client.get("/api/plans")
+    assert listing.status_code == 401
+    assert listing.get_json()["error"] == "X-User-Id is required"
+
+    create = client.post(
+        "/api/plans",
+        json={
+            "title": "Coffee",
+            "activity_type": "coffee",
+            "location_text": "Seattle",
+        },
+    )
+    assert create.status_code == 401
+    assert create.get_json()["error"] == "X-User-Id is required"
+
+    detail = client.get("/api/plans/some-id")
+    assert detail.status_code == 401
+
+    join = client.post("/api/plans/some-id/join")
+    assert join.status_code == 401
+
+    matches = client.get("/api/plans/some-id/matches")
+    assert matches.status_code == 401
+
+
 def test_post_ticket_requires_a_user_id(client):
     response = client.post(
         "/api/tickets",

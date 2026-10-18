@@ -3,6 +3,11 @@ import type { OnboardingInput, OnboardingProfile } from "./onboarding"
 const apiBase = () =>
   (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "")
 
+/** Website origin for post-save CTAs. Tokens are never stored in chrome.storage. */
+export function webAppUrl() {
+  return (import.meta.env.VITE_WEB_APP_URL || "http://localhost:5174").replace(/\/$/, "")
+}
+
 export type Ticket = {
   id: string
   title: string

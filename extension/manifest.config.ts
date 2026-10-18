@@ -8,14 +8,15 @@ const EXTENSION_KEY =
 
 export default defineManifest({
   manifest_version: 3,
-  name: "Ticket Trapper",
-  description: "Save the current page as a ticket.",
+  name: "Orbit",
+  description: "Save the current tab to Orbit and find people to go with.",
   version: "0.1.0",
   key: EXTENSION_KEY,
   action: {
     default_popup: "src/popup/index.html",
-    default_title: "Ticket Trapper",
+    default_title: "Orbit",
   },
+
   background: {
     service_worker: "src/background/index.ts",
     type: "module",

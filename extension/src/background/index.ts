@@ -1,3 +1,3 @@
 chrome.runtime.onInstalled.addListener(() => {
-  console.info("Ticket Trapper installed")
+  console.info("Orbit extension installed")
 })

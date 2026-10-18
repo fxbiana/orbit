@@ -10,7 +10,7 @@ export function App() {
   if (!publishableKey) {
     return (
       <main className="hall">
-        <p className="eyebrow">Ticket Trapper</p>
+        <p className="eyebrow">Orbit</p>
         <h1>Add the Clerk publishable key to web/.env, then restart the site.</h1>
       </main>
     )
@@ -32,7 +32,7 @@ function Site() {
   return (
     <div className="hall">
       <header className="top">
-        <p className="wordmark">Ticket Trapper</p>
+        <p className="wordmark">Orbit</p>
         <div className="account">
           <Show when="signed-out">
             <SignInButton mode="modal" />
@@ -68,8 +68,12 @@ function Hero() {
         </div>
       </div>
       <div className="hero-copy">
-        <h1>Find the person who already knows the thing you want to learn.</h1>
-        <p>Answer a few pages about yourself. The list ranks people from the sample set.</p>
+        <p className="brand">Orbit</p>
+        <h1>Where Worlds Connect</h1>
+        <p>
+          Connect through shared interests, discover events and plans, and turn those plans into
+          real-world friendships.
+        </p>
       </div>
     </section>
   )
