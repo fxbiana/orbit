@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest"
-import { readActiveTab } from "./tabs"
+import { DEMO_TAB, readActiveTab, readTabForSave } from "./tabs"
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -49,6 +49,24 @@ it("rejects when the active tab has no url", async () => {
   })
 
   await expect(readActiveTab()).rejects.toThrow("No active tab")
+})
+
+it("uses the sample event page when the active tab cannot be read", async () => {
+  vi.stubGlobal("chrome", undefined)
+
+  await expect(readTabForSave()).resolves.toEqual({ ...DEMO_TAB, sample: true })
+})
+
+it("marks a readable tab as the real page", async () => {
+  installChrome((_query, callback) => {
+    callback([{ title: "Docs", url: "https://example.com/docs" } as chrome.tabs.Tab])
+  })
+
+  await expect(readTabForSave()).resolves.toEqual({
+    title: "Docs",
+    url: "https://example.com/docs",
+    sample: false,
+  })
 })
 
 it("rejects when there is no active tab", async () => {

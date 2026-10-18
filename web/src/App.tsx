@@ -1,6 +1,7 @@
 import { ClerkProvider, Show, SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/react"
 import { useEffect, useState } from "react"
 import { DemoDesk } from "./DemoDesk"
+import { FutureExtension } from "./FutureExtension"
 import { OnboardingForm } from "./OnboardingForm"
 import { SavePage } from "./SavePage"
 
@@ -10,7 +11,7 @@ export function App() {
   if (!publishableKey) {
     return (
       <main className="hall">
-        <p className="eyebrow">Orbit</p>
+        <BrandMark />
         <h1>Add the Clerk publishable key to web/.env, then restart the site.</h1>
         <SignedOutPitch />
       </main>
@@ -25,11 +26,12 @@ export function App() {
       signUpFallbackRedirectUrl="/"
       appearance={{
         variables: {
-          colorPrimary: "#c4471a",
-          colorBackground: "#fff8f3",
-          colorForeground: "#4a2e24",
-          colorInput: "#fffdfb",
-          colorInputForeground: "#4a2e24",
+          colorPrimary: "#7d8cff",
+          colorBackground: "#12182c",
+          colorForeground: "#f4f6ff",
+          colorInput: "#0c1224",
+          colorInputForeground: "#f4f6ff",
+          colorNeutral: "#f4f6ff",
           borderRadius: "10px",
           fontFamily: "Nunito, sans-serif",
         },
@@ -37,6 +39,14 @@ export function App() {
     >
       <Site />
     </ClerkProvider>
+  )
+}
+
+function BrandMark() {
+  return (
+    <a className="brand" href="/">
+      <img src="/orbit-logo.png" alt="Orbit" />
+    </a>
   )
 }
 
@@ -61,7 +71,7 @@ function Site() {
   return (
     <div className="hall">
       <header className="top">
-        <p className="wordmark">Orbit</p>
+        <BrandMark />
         <div className="account">
           <Show when="signed-out">
             <SignInButton mode="modal">
@@ -104,6 +114,7 @@ function SignedOutPitch() {
   return (
     <>
       <Hero />
+      <FutureExtension />
       <DemoDesk />
     </>
   )

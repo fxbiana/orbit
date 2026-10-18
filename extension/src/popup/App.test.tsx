@@ -5,7 +5,7 @@ import { App, TicketPanel } from "./App"
 import { INVITE_SUMMARY_STORAGE_KEY } from "../invites"
 import { createTicket, listInboxInvites } from "./api"
 import { OnboardingForm } from "./OnboardingForm"
-import { readActiveTab } from "../tabs"
+import { readTabForSave } from "../tabs"
 
 const clerk = vi.hoisted(() => ({
   signedIn: true,
@@ -27,7 +27,7 @@ vi.mock("@clerk/chrome-extension", () => ({
 }))
 
 vi.mock("../tabs", () => ({
-  readActiveTab: vi.fn(),
+  readTabForSave: vi.fn(),
 }))
 
 vi.mock("./api", async () => {
@@ -54,8 +54,8 @@ beforeEach(() => {
   clerk.token = "session-token"
   vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", "pk_test_example")
   vi.stubEnv("VITE_WEB_APP_URL", "http://localhost:5174")
-  vi.mocked(readActiveTab).mockReset()
-  vi.mocked(readActiveTab).mockResolvedValue(tab)
+  vi.mocked(readTabForSave).mockReset()
+  vi.mocked(readTabForSave).mockResolvedValue({ ...tab, sample: false })
   vi.mocked(createTicket).mockReset()
   vi.mocked(listInboxInvites).mockReset()
   vi.mocked(listInboxInvites).mockResolvedValue([])
@@ -102,13 +102,19 @@ it("loads the active tab title and url", async () => {
   expect(screen.queryByRole("link", { name: "Find people on Orbit" })).not.toBeInTheDocument()
 })
 
-it("shows an error when the active tab cannot be read", async () => {
-  vi.mocked(readActiveTab).mockRejectedValue(new Error("No active tab"))
+it("shows a sample event page when the active tab cannot be read", async () => {
+  const sample = {
+    title: "Dance show",
+    url: "https://www.ticketmaster.com/dance-show-seattle",
+  }
+  vi.mocked(readTabForSave).mockResolvedValue({ ...sample, sample: true })
 
   render(<TicketPanel getToken={async () => "session-token"} />)
 
-  expect(await screen.findByText("No active tab")).toBeInTheDocument()
-  expect(screen.getByRole("button", { name: "Save to Orbit" })).toBeDisabled()
+  expect(await screen.findByText(sample.title)).toBeInTheDocument()
+  expect(screen.getByText(sample.url)).toBeInTheDocument()
+  expect(screen.getByText(/sample event page/)).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Save to Orbit" })).toBeEnabled()
 })
 
 it("shows sign-in and sign-up when signed out", async () => {
@@ -119,7 +125,7 @@ it("shows sign-in and sign-up when signed out", async () => {
   expect(await screen.findByRole("heading", { name: "Orbit" })).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Sign up" })).toBeInTheDocument()
-  expect(readActiveTab).not.toHaveBeenCalled()
+  expect(readTabForSave).not.toHaveBeenCalled()
 })
 
 it("caches inbox invite summaries after the popup signs in", async () => {
@@ -168,7 +174,7 @@ it("shows an error when the session has no token", async () => {
   render(<App />)
 
   expect(await screen.findByText("No session token")).toBeInTheDocument()
-  expect(readActiveTab).not.toHaveBeenCalled()
+  expect(readTabForSave).not.toHaveBeenCalled()
 })
 
 it("saves the tab and offers Find people on Orbit", async () => {
