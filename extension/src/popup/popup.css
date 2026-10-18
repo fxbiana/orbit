@@ -63,6 +63,67 @@ button:disabled {
   color: #9f1239;
 }
 
+.note {
+  margin: 0;
+  color: #57534e;
+}
+
+.saved {
+  color: #3f6212;
+}
+
+.onboarding label {
+  display: block;
+  margin-top: 10px;
+  color: #44403c;
+  font-size: 12px;
+}
+
+.onboarding input,
+.onboarding select {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 8px;
+  border: 1px solid #d6d3d1;
+  border-radius: 6px;
+  background: #fff;
+  color: inherit;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.onboarding input:focus,
+.onboarding select:focus {
+  outline: 2px solid #9a3412;
+  outline-offset: 1px;
+}
+
+.onboarding input:disabled,
+.onboarding select:disabled {
+  opacity: 0.7;
+}
+
+.onboarding fieldset {
+  min-width: 0;
+  margin: 14px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.onboarding legend {
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.onboarding button {
+  margin-top: 14px;
+}
+
 ul {
   margin: 0;
   padding-left: 18px;
