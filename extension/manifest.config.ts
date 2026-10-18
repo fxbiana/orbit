@@ -21,6 +21,13 @@ export default defineManifest({
     service_worker: "src/background/index.ts",
     type: "module",
   },
-  permissions: ["activeTab"],
+  permissions: ["activeTab", "storage"],
   host_permissions: ["http://localhost:5000/*", "https://*.clerk.accounts.dev/*"],
+  content_scripts: [
+    {
+      matches: ["https://www.instagram.com/*", "https://instagram.com/*"],
+      js: ["src/content/instagram.ts"],
+      run_at: "document_idle",
+    },
+  ],
 })

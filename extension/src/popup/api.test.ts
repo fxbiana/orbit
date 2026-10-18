@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { createTicket, listTickets } from "./api"
+import { createTicket, listInboxInvites, listTickets } from "./api"
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -83,6 +83,55 @@ describe("api", () => {
     )
 
     await expect(listTickets("local_user")).rejects.toThrow("title and url are required")
+  })
+
+  it("loads inbox invites with the session bearer token", async () => {
+    const body = {
+      invites: [
+        {
+          id: "inv-1",
+          plan_id: "plan-1",
+          plan_title: "Friday market",
+          from_user_id: "user-a",
+          to_user_id: "user-b",
+          from_first_name: "Mina",
+          status: "pending",
+          note: "",
+          created_at: "2026-10-18T15:00:00Z",
+          token: "do-not-cache",
+        },
+      ],
+    }
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(body))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(listInboxInvites("session-token")).resolves.toEqual([
+      {
+        id: "inv-1",
+        plan_id: "plan-1",
+        plan_title: "Friday market",
+        from_user_id: "user-a",
+        to_user_id: "user-b",
+        from_first_name: "Mina",
+        status: "pending",
+        note: "",
+        created_at: "2026-10-18T15:00:00Z",
+      },
+    ])
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:5000/api/invites?box=inbox", {
+      headers: {
+        Authorization: "Bearer session-token",
+        "Content-Type": "application/json",
+      },
+    })
+  })
+
+  it("returns no invites on 404 or a network failure", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ error: "missing" }, 404)))
+    await expect(listInboxInvites("session-token")).resolves.toEqual([])
+
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")))
+    await expect(listInboxInvites("session-token")).resolves.toEqual([])
   })
 
   it("throws the status code when the error body is empty", async () => {

@@ -2,7 +2,7 @@
 
 Audience: SE implementing the next layers. Sources of truth: `AGENTS.md` (Product decisions locked), `backend/app/onboarding.py`, `backend/app/firebase.py`, ticket/onboarding routes, `backend/app/matching.py`.
 
-**Status:** Onboarding, tickets, matches, **Open Plans**, contact links, and connections are implemented. Events / attendance / Spotify below remain **design only**. Do not break existing onboarding, tickets, matches, plans, contact, or connections.
+**Status:** Onboarding, tickets, matches, **Open Plans**, contact links, connections, and Spotify import are implemented. Events / attendance remain **design only**. Do not break existing onboarding, tickets, matches, plans, contact, or connections.
 
 ---
 
@@ -148,7 +148,7 @@ Match list visibility (locked product): score + limited fields (name, location, 
 | **Extend, don’t rewrite** | Keep onboarding + tickets shapes. Add collections beside them. |
 | **No second DB** | Firestore only. No Postgres/SQLite. |
 | **Caller from auth** | `g.user_id` only. Reject body `user_id` as caller. |
-| **Spotify optional** | No audio-features / recommendations / related-artists dependency. Map genres into existing `interests` topic after user confirm. |
+| **Spotify optional** | No new topic key. No audio-features / recommendations / related-artists dependency. Suggestions may fill the existing five topics (interests, festivals, locations, hobbies, languages); the user confirms before `PUT /api/onboarding`. |
 
 North star: preference compatibility → shared event intent → consented connection.
 
@@ -156,7 +156,7 @@ North star: preference compatibility → shared event intent → consented conne
 
 ## 3. Additive schema
 
-Open Plans (§3.5), contact links (§3.7), and connections (§3.3) are **shipped**. Events / attendance / Spotify / optional ticket `event_id` remain proposals unless noted.
+Open Plans (§3.5), contact links (§3.7), connections (§3.3), and Spotify import (§3.6) are **shipped**. Events / attendance / optional ticket `event_id` remain proposals unless noted.
 
 ### 3.1 Events — `events/{eventId}`
 
@@ -374,17 +374,22 @@ plans/{planId}/members/{userId}
 Open Plans are the demo-sized “shared intent” surface. Canonical `events/{eventId}` + attendance remain the product **Next** layer for Ticketmaster-scale discovery. Do not rename tickets to plans. Do not store plan membership inside onboarding topics.
 ---
 
-### 3.6 Optional Spotify snapshot — `users/{userId}/profile/spotify`
+### 3.6 Optional Spotify snapshot — `users/{userId}/profile/spotify` (**shipped**)
 
-Separate document; **no OAuth tokens** in Firestore.
+Separate document. OAuth tokens are not stored.
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `genres` | string[] | normalized, capped (e.g. 20 × 80) |
+| `genres` | string[] | normalized labels from top-artist genres |
+| `artists` | object[] | `{name, genres}` |
+| `tracks` | object[] | recent plays: `name`, `artists`, `album`, `played_at` |
+| `top_tracks` | object[] | short-term top tracks |
+| `suggestions` | object | five topic objects (`languages`, `locations`, `hobbies`, `interests`, `festivals`), each `{knows, wants_to_learn}` |
+| `model` | string | model name; empty when fallback suggestions are used |
 | `imported_at` | timestamp | |
-| `source` | string | e.g. `clerk_spotify` |
+| `source` | string | `clerk_spotify` |
 
-Flow (later): Clerk Spotify external account → Flask import with user token from Clerk → suggest chips into `interests.knows` / `interests.wants_to_learn` → user confirms → `PUT /api/onboarding`. Do not add a sixth topic key. No Spotify audio-features / recommendations APIs.
+Flow (shipped): Clerk Spotify token → Flask fetch of recent tracks plus short-term top artists and tracks → suggestions into the existing five topics → user confirms → existing `PUT /api/onboarding`. Import does not write onboarding. No sixth topic. No audio-features, recommendations, or related-artists.
 
 ---
 
@@ -589,11 +594,11 @@ Style: blueprint under `backend/app/routes/`, `@bp.get|post|put|delete` then `@c
 | POST | `/api/plans/<id>/join` | Clerk | join if open and under capacity |
 | GET | `/api/plans/<id>/matches` | Clerk | rank members vs caller |
 
-### Spotify (later)
+### Spotify (shipped)
 
 | Method | Path | Auth | Notes |
 | --- | --- | --- | --- |
-| POST | `/api/spotify/import` | Clerk | writes `profile/spotify`; returns suggested interest chips — does not auto-merge into onboarding |
+| POST | `/api/spotify/import` | Clerk | shipped; writes `profile/spotify`; returns artists, tracks, genres, five-topic suggestions, and model — does not merge into onboarding |
 
 ---
 
@@ -633,7 +638,7 @@ Style: blueprint under `backend/app/routes/`, `@bp.get|post|put|delete` then `@c
 - [ ] Connections after (or in parallel with) people-for-event: pending → accept/reject; pair-id uniqueness.
 - [ ] Tests: auth on all new routes; isolation by `g.user_id`; attendance upsert; connect accept authorization.
 - [ ] Ticketmaster later: map into same event fields; no second model.
-- [ ] Spotify later: optional; chips → `interests` only after confirm.
+- [x] Spotify import is shipped (`POST /api/spotify/import`). Chips are still confirmed by `PUT /api/onboarding`.
 
 ---
 

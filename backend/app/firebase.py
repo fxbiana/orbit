@@ -486,10 +486,23 @@ def save_meta_snapshot(clerk_user_id: str, languages: list[str]) -> dict:
     }
 
 
-def save_spotify_snapshot(clerk_user_id: str, genres: list[str]) -> dict:
-    """Store normalized genres only. OAuth tokens never go in this document."""
+def save_spotify_snapshot(clerk_user_id: str, snapshot: dict) -> dict:
+    """Store a token-free listening snapshot. OAuth tokens never go in this document."""
+    fields = snapshot if isinstance(snapshot, dict) else {}
+
+    def as_list(key: str) -> list:
+        value = fields.get(key)
+        return list(value) if isinstance(value, list) else []
+
+    suggestions = fields.get("suggestions")
+    model = fields.get("model")
     payload = {
-        "genres": list(genres),
+        "genres": as_list("genres"),
+        "artists": as_list("artists"),
+        "tracks": as_list("tracks"),
+        "top_tracks": as_list("top_tracks"),
+        "suggestions": dict(suggestions) if isinstance(suggestions, dict) else {},
+        "model": model if isinstance(model, str) else "",
         "imported_at": datetime.now(timezone.utc),
         "source": "clerk_spotify",
     }
@@ -502,6 +515,11 @@ def save_spotify_snapshot(clerk_user_id: str, genres: list[str]) -> dict:
         abort(503, description="Firestore request failed")
     return {
         "genres": payload["genres"],
+        "artists": payload["artists"],
+        "tracks": payload["tracks"],
+        "top_tracks": payload["top_tracks"],
+        "suggestions": payload["suggestions"],
+        "model": payload["model"],
         "imported_at": _iso(payload["imported_at"]),
         "source": payload["source"],
     }

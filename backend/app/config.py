@@ -36,3 +36,5 @@ class Config:
     CORS_ORIGINS = env_csv("CORS_ORIGINS", DEFAULT_ORIGINS)
     FIREBASE_CREDENTIALS_PATH = os.environ.get("FIREBASE_CREDENTIALS_PATH", "")
     TICKETMASTER_API_KEY = os.environ.get("TICKETMASTER_API_KEY", "")
+    AI_API_KEY = os.environ.get("AI_API_KEY", "")
+    AI_MODEL = os.environ.get("AI_MODEL", "")
