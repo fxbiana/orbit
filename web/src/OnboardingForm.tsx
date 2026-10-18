@@ -189,13 +189,21 @@ export function OnboardingForm({
   return (
     <form className="flow onboarding" onSubmit={last ? finish : goNext}>
       <p className="step-count">
-        {stepIndex + 1} of {FLOW_STEPS.length}
+        Step {stepIndex + 1} of {FLOW_STEPS.length}
       </p>
+      <div className="track" aria-hidden="true">
+        {FLOW_STEPS.map((item, index) => (
+          <span
+            key={item.id}
+            className={index < stepIndex ? "done" : index === stepIndex ? "now" : undefined}
+          />
+        ))}
+      </div>
       <h2>{step.title}</h2>
       {stepIndex === 0 ? (
         <p className="note">
-          Tell Orbit enough to find your people. Answers are filled in so you can click through —
-          change any of them.
+          Welcome. A few answers is enough to find your people. Examples are filled in so you can
+          look around — change anything that isn’t you.
         </p>
       ) : null}
       {topic ? <p className="note">Separate items with commas.</p> : null}

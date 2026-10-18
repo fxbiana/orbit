@@ -22,6 +22,17 @@ export function App() {
       afterSignOutUrl="/"
       signInFallbackRedirectUrl="/"
       signUpFallbackRedirectUrl="/"
+      appearance={{
+        variables: {
+          colorPrimary: "#c4471a",
+          colorBackground: "#fff8f3",
+          colorText: "#4a2e24",
+          colorInputBackground: "#fffdfb",
+          colorInputText: "#4a2e24",
+          borderRadius: "10px",
+          fontFamily: "Nunito, sans-serif",
+        },
+      }}
     >
       <Site />
     </ClerkProvider>
@@ -35,8 +46,16 @@ function Site() {
         <p className="wordmark">Orbit</p>
         <div className="account">
           <Show when="signed-out">
-            <SignInButton mode="modal" />
-            <SignUpButton mode="modal" />
+            <SignInButton mode="modal">
+              <button type="button" className="ghost">
+                Sign in
+              </button>
+            </SignInButton>
+            <SignUpButton mode="modal">
+              <button type="button" className="primary">
+                Sign up
+              </button>
+            </SignUpButton>
           </Show>
           <Show when="signed-in">
             <UserButton />
@@ -57,6 +76,13 @@ function Site() {
 function Hero() {
   return (
     <section className="hero">
+      <div className="hero-copy">
+        <h1>Where Worlds Connect</h1>
+        <p>
+          Tell us what you want to learn. We’ll introduce you to someone who already knows it, so
+          you can make a plan and go together.
+        </p>
+      </div>
       <div className="stub" aria-hidden="true">
         <div>
           <p>You want to learn</p>
@@ -66,14 +92,6 @@ function Hero() {
           <p>They already know</p>
           <strong>Amira · 100</strong>
         </div>
-      </div>
-      <div className="hero-copy">
-        <p className="brand">Orbit</p>
-        <h1>Where Worlds Connect</h1>
-        <p>
-          Connect through shared interests, discover events and plans, and turn those plans into
-          real-world friendships.
-        </p>
       </div>
     </section>
   )

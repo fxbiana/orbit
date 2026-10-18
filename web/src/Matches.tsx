@@ -141,18 +141,28 @@ export function Matches({
 
   const top = people[0]
   const others = people.slice(1)
-  const heading = source === "api" ? "People near you" : "Showing sample people"
+  const heading =
+    source === "api" && viewer.first_name
+      ? `${viewer.first_name}, people near you`
+      : source === "api"
+        ? "People near you"
+        : "Showing sample people"
 
   return (
     <section className="matches">
       <h2>{heading}</h2>
       <p className="note">
         {loading ? "Looking for people who fit you… " : null}
-        Top {people.length}
-        {source === "sample" ? ` of ${total}` : null}, highest score first. 40 points when they know
-        something you want to learn. City, gathering size, and age add the rest, up to 100.
+        Start with the person at the top. {people.length}
+        {source === "sample" ? ` of ${total}` : ""} shown, highest score first. 40 points when they
+        know something you want to learn. City, gathering size, and age add the rest, up to 100.
       </p>
-      {top ? <PersonRow person={top} lead /> : null}
+      {top ? (
+        <div className="closest">
+          <p className="eyebrow">Your closest match</p>
+          <PersonRow person={top} lead />
+        </div>
+      ) : null}
       <ol className="people">
         {others.map((person) => (
           <PersonRow key={person.id} person={person} />
