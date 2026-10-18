@@ -8,12 +8,27 @@ from firebase_admin import credentials, firestore
 from flask import abort, current_app
 from werkzeug.exceptions import HTTPException
 
+from app.config import ROOT
+
 log = logging.getLogger(__name__)
 _firestore = None
 
 
 def _credentials_path() -> str:
     return (current_app.config.get("FIREBASE_CREDENTIALS_PATH") or "").strip()
+
+
+def _resolve_credentials_path(configured: str) -> Path:
+    """Resolve a relative credentials path against the repo root.
+
+    Absolute paths are left unchanged. The process cwd is not used, so a
+    relative path still finds a file next to the root ``.env`` when Flask is
+    started from ``backend/``.
+    """
+    candidate = Path(configured)
+    if candidate.is_absolute():
+        return candidate
+    return (ROOT / candidate).resolve()
 
 
 def firestore_client():
@@ -25,14 +40,15 @@ def firestore_client():
     path = _credentials_path()
     if not path:
         abort(503, description="FIREBASE_CREDENTIALS_PATH is not configured")
-    if not Path(path).is_file():
+    credentials_file = _resolve_credentials_path(path)
+    if not credentials_file.is_file():
         abort(503, description=f"Firebase credentials file not found: {path}")
 
     try:
         try:
             firebase_admin.get_app()
         except ValueError:
-            firebase_admin.initialize_app(credentials.Certificate(path))
+            firebase_admin.initialize_app(credentials.Certificate(str(credentials_file)))
         _firestore = firestore.client()
     except Exception:
         log.exception("Firebase Admin failed to initialize")
