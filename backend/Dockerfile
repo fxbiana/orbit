@@ -1,8 +1,4 @@
-FROM node:24-bookworm-slim AS nodebin
-
 FROM python:3.12-slim-bookworm
-
-COPY --from=nodebin /usr/local/bin/node /usr/local/bin/node
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -11,8 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /workspace
 
 COPY backend/requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt \
-    && node --version
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY backend /workspace/backend
 

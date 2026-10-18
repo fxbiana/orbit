@@ -8,21 +8,16 @@ import {
 } from "@clerk/chrome-extension"
 import { useEffect, useState } from "react"
 import { readActiveTab } from "../tabs"
-import { createTicket, listTickets, sessionToken, type Ticket } from "./api"
-import { OnboardingForm } from "./OnboardingForm"
+import { createTicket, sessionToken, webAppUrl } from "./api"
 
 export function App() {
   const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
-  const popupUrl = chrome.runtime.getURL("src/popup/index.html")
 
   if (!publishableKey) {
-    return (
-      <main className="popup">
-        <h1>Ticket Trapper</h1>
-        <p>Set VITE_CLERK_PUBLISHABLE_KEY in extension/.env, then restart the extension dev server.</p>
-      </main>
-    )
+    return <DegradedPopup />
   }
+
+  const popupUrl = chrome.runtime.getURL("src/popup/index.html")
 
   return (
     <ClerkProvider
@@ -33,13 +28,13 @@ export function App() {
     >
       <main className="popup">
         <header className="bar">
-          <h1>Ticket Trapper</h1>
+          <h1>Orbit</h1>
           <Show when="signed-in">
             <UserButton />
           </Show>
         </header>
         <Show when="signed-out">
-          <p>Sign in to save the page you are on.</p>
+          <p>Sign in to save this tab to Orbit.</p>
           <div className="auth-actions">
             <SignInButton mode="modal" />
             <SignUpButton mode="modal" />
@@ -53,9 +48,68 @@ export function App() {
   )
 }
 
+/** Shown when Clerk is not configured. UI still works; save is copy-URL only. */
+function DegradedPopup() {
+  const [tab, setTab] = useState<{ title: string; url: string } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const site = webAppUrl()
+
+  useEffect(() => {
+    let cancelled = false
+    readActiveTab()
+      .then((active) => {
+        if (!cancelled) setTab(active)
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setError(err.message)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function copyUrl() {
+    if (!tab?.url) return
+    setError(null)
+    try {
+      await navigator.clipboard.writeText(tab.url)
+      setCopied(true)
+    } catch {
+      setError("Could not copy URL")
+    }
+  }
+
+  return (
+    <main className="popup">
+      <header className="bar">
+        <h1>Orbit</h1>
+      </header>
+      <p className="note">
+        Set VITE_CLERK_PUBLISHABLE_KEY in extension/.env to save with your account. Until then, copy
+        this tab URL and paste it on the Orbit site.
+      </p>
+      <section>
+        <h2>This tab</h2>
+        <p className="title">{tab?.title ?? "Reading the active tab..."}</p>
+        {tab?.url ? <p className="url">{tab.url}</p> : null}
+        <div className="actions">
+          <button type="button" onClick={copyUrl} disabled={!tab}>
+            {copied ? "Copied" : "Copy URL"}
+          </button>
+          <a className="secondary-cta" href={site} target="_blank" rel="noreferrer">
+            Open Orbit
+          </a>
+        </div>
+      </section>
+      {error ? <p className="error">{error}</p> : null}
+    </main>
+  )
+}
+
 function SignedInApp() {
   const { getToken } = useAuth()
-  const [token, setToken] = useState<string | null>(null)
+  const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -64,7 +118,7 @@ function SignedInApp() {
       .then((value) => {
         if (cancelled) return
         if (!value) setError("No session token")
-        else setToken(value)
+        else setReady(true)
       })
       .catch((err: Error) => {
         if (!cancelled) setError(err.message)
@@ -77,23 +131,21 @@ function SignedInApp() {
   return (
     <>
       {error ? <p className="error">{error}</p> : null}
-      {!token && !error ? <p>Loading...</p> : null}
-      {token ? (
-        <OnboardingForm getToken={getToken} extras={<TicketPanel getToken={getToken} />} />
-      ) : null}
+      {!ready && !error ? <p>Loading...</p> : null}
+      {ready ? <TicketPanel getToken={getToken} /> : null}
     </>
   )
 }
 
 export function TicketPanel({ getToken }: { getToken: () => Promise<string | null> }) {
   const [tab, setTab] = useState<{ title: string; url: string } | null>(null)
-  const [tickets, setTickets] = useState<Ticket[]>([])
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const site = webAppUrl()
 
   useEffect(() => {
     let cancelled = false
-
     readActiveTab()
       .then((active) => {
         if (!cancelled) setTab(active)
@@ -101,30 +153,21 @@ export function TicketPanel({ getToken }: { getToken: () => Promise<string | nul
       .catch((err: Error) => {
         if (!cancelled) setError(err.message)
       })
-
-    sessionToken(getToken)
-      .then((fresh) => listTickets(fresh))
-      .then((body) => {
-        if (!cancelled) setTickets(body.tickets)
-      })
-      .catch((err: Error) => {
-        if (!cancelled) setError(err.message)
-      })
-
     return () => {
       cancelled = true
     }
-  }, [getToken])
+  }, [])
 
   async function save() {
     if (!tab) return
     setSaving(true)
     setError(null)
+    setSaved(false)
     try {
+      // Fresh Clerk session token each save — never written to chrome.storage.
       const fresh = await sessionToken(getToken)
       await createTicket(fresh, tab)
-      const body = await listTickets(fresh)
-      setTickets(body.tickets)
+      setSaved(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed")
     } finally {
@@ -135,27 +178,22 @@ export function TicketPanel({ getToken }: { getToken: () => Promise<string | nul
   return (
     <>
       <section>
-        <h2>This page</h2>
+        <h2>This tab</h2>
         <p className="title">{tab?.title ?? "Reading the active tab..."}</p>
         {tab?.url ? <p className="url">{tab.url}</p> : null}
         <button type="button" onClick={save} disabled={!tab || saving}>
-          {saving ? "Saving..." : "Save ticket"}
+          {saving ? "Saving..." : "Save to Orbit"}
         </button>
       </section>
       {error ? <p className="error">{error}</p> : null}
-      <section>
-        <h2>Saved</h2>
-        {tickets.length === 0 ? <p>No tickets yet.</p> : null}
-        <ul>
-          {tickets.map((ticket) => (
-            <li key={ticket.id}>
-              <a href={ticket.url} target="_blank" rel="noreferrer">
-                {ticket.title}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </section>
+      {saved ? (
+        <section className="after-save">
+          <p className="note">Saved to Orbit.</p>
+          <a className="secondary-cta" href={site} target="_blank" rel="noreferrer">
+            Find people on Orbit
+          </a>
+        </section>
+      ) : null}
     </>
   )
 }

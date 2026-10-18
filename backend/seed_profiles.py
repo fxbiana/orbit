@@ -4,57 +4,31 @@ Each person is stored at ``users/{uuid}/profile/onboarding``. The uuid is that
 person's id. ``compatibility_score`` and ``matched_on`` stay off the document:
 they depend on the viewer, and ``parse_onboarding`` rejects them.
 
+The people come from ``backend/sample_people.json``, exported from
+``web/src/sampleProfiles.ts``. The website match list still scores in the
+browser from that TypeScript module; this file is only for Firestore.
+
 From ``backend/``:
 
     python seed_profiles.py
 """
 
 import json
-import subprocess
-import tempfile
 from pathlib import Path
 
 from app.auth import _USER_ID
-from app.config import ROOT
 from app.onboarding import TOPIC_KEYS, parse_onboarding
 
 STORED_FIELDS = ("username", "first_name", "location", "age", "gathering_size", *TOPIC_KEYS)
-EXTENSION = ROOT / "extension"
+SAMPLE_PEOPLE_PATH = Path(__file__).resolve().parent / "sample_people.json"
 
 
 def load_sample_people() -> list[dict]:
-    """Load SAMPLE_PEOPLE from the extension module."""
-    esbuild = EXTENSION / "node_modules/esbuild/bin/esbuild"
-    source = EXTENSION / "src/popup/sampleProfiles.ts"
-    with tempfile.TemporaryDirectory() as tmp:
-        outfile = Path(tmp) / "sampleProfiles.mjs"
-        subprocess.run(
-            [
-                str(esbuild),
-                str(source),
-                "--bundle",
-                "--format=esm",
-                f"--outfile={outfile}",
-            ],
-            check=True,
-            cwd=EXTENSION,
-            capture_output=True,
-            text=True,
-        )
-        completed = subprocess.run(
-            [
-                "node",
-                "--input-type=module",
-                "-e",
-                "import { SAMPLE_PEOPLE } from "
-                + json.dumps(outfile.as_uri())
-                + "; process.stdout.write(JSON.stringify(SAMPLE_PEOPLE))",
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    return json.loads(completed.stdout)
+    """Load the committed sample people JSON."""
+    people = json.loads(SAMPLE_PEOPLE_PATH.read_text(encoding="utf-8"))
+    if not isinstance(people, list):
+        raise ValueError("sample_people.json must be a list")
+    return people
 
 
 def document_for(person: dict) -> tuple[str, dict]:

@@ -1,10 +1,13 @@
-from seed_profiles import document_for, load_sample_people
+from seed_profiles import SAMPLE_PEOPLE_PATH, document_for, load_sample_people
 
 
 def test_sample_people_match_the_onboarding_schema():
+    assert SAMPLE_PEOPLE_PATH.is_file()
     people = load_sample_people()
 
     assert len(people) == 100
+    assert people[0]["id"] == "1ec93661-7c2e-413f-8fde-908dcf28e4ba"
+    assert people[0]["first_name"] == "Amira"
     user_ids = []
     for person in people:
         user_id, profile = document_for(person)
