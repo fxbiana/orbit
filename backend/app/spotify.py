@@ -48,9 +48,11 @@ def suggestions_from_genres(genres: list[str]) -> dict:
 
 
 def fetch_top_artist_genres(access_token: str, opener=urllib.request.urlopen) -> list[str]:
-    """GET the caller's medium-term top artists and collect genre strings.
+    """GET the caller's medium-term top artists and collect preference labels.
 
     Reads ``artists`` when present, otherwise Spotify's ``items`` array.
+    Uses genre labels when Spotify sends them. When every genre list is empty,
+    uses the artist names so a music taste still becomes a suggestion.
     Does not call audio-features, recommendations, or related-artists.
     """
     request = urllib.request.Request(
@@ -84,13 +86,17 @@ def fetch_top_artist_genres(access_token: str, opener=urllib.request.urlopen) ->
 
     artists = _artist_list(payload)
     genres: list[str] = []
+    names: list[str] = []
     for artist in artists:
         if not isinstance(artist, dict):
             continue
+        name = artist.get("name")
+        if isinstance(name, str) and name.strip():
+            names.append(name.strip())
         values = artist.get("genres") or []
         if isinstance(values, list):
             genres.extend(value for value in values if isinstance(value, str))
-    return genres
+    return genres or names
 
 
 def _artist_list(payload) -> list:

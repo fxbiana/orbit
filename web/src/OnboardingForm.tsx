@@ -17,6 +17,7 @@ import {
   FLOW_STEPS,
   GATHERING_SIZES,
   ONBOARDING_LIMITS,
+  INTEREST_STARTERS,
   PREFERENCE_GROUP_LABELS,
   PROFILE_FIELDS,
   cleanText,
@@ -114,7 +115,17 @@ function toInput(draft: Draft): OnboardingInput {
 }
 
 function mergeCommaList(current: string, incoming: string[]): string {
-  return formatList(parseList(`${current},${incoming.join(",")}`))
+  const merged = parseList(current)
+  const seen = new Set(merged.map((item) => item.toLocaleLowerCase()))
+  for (const item of incoming) {
+    const text = cleanText(item)
+    const key = text.toLocaleLowerCase()
+    if (!text || seen.has(key)) continue
+    if (merged.length >= ONBOARDING_LIMITS.list) break
+    seen.add(key)
+    merged.push(text)
+  }
+  return formatList(merged)
 }
 
 function ProfilePanel({
@@ -403,7 +414,12 @@ export function OnboardingForm({
       {step.id === "reach" ? (
         <p className="note">Usernames are optional. Spotify and Meta suggestions come next.</p>
       ) : null}
-      {step.id === "preferences" ? <p className="note">Separate items with commas.</p> : null}
+      {step.id === "preferences" ? (
+        <p className="note">
+          Add sports, food, outdoors, or anything else you want to do with people. Separate items with commas.
+          Spotify only adds music.
+        </p>
+      ) : null}
 
       {step.id === "about" ? (
         <>
@@ -499,14 +515,36 @@ export function OnboardingForm({
             <input
               id="preferences-knows"
               value={draft.preferences.knows}
+              placeholder="Basketball, cooking, hiking"
               onChange={(event) => updatePreferences("knows", event.target.value)}
             />
           </label>
+          <div className="actions">
+            {INTEREST_STARTERS.map((interest) => (
+              <button
+                key={interest}
+                type="button"
+                className="ghost"
+                onClick={() =>
+                  setDraft((current) => ({
+                    ...current,
+                    preferences: {
+                      ...current.preferences,
+                      knows: mergeCommaList(current.preferences.knows, [interest]),
+                    },
+                  }))
+                }
+              >
+                {interest}
+              </button>
+            ))}
+          </div>
           <label htmlFor="preferences-wants">
             {PREFERENCE_GROUP_LABELS.wants}
             <input
               id="preferences-wants"
               value={draft.preferences.wants}
+              placeholder="Soccer, jazz clubs"
               onChange={(event) => updatePreferences("wants", event.target.value)}
             />
           </label>

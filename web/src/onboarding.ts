@@ -99,6 +99,9 @@ export const PREFERENCE_GROUP_LABELS = {
   wants: "Preferences you want",
 } as const
 
+/** One-tap interests outside music. Spotify only fills the music side. */
+export const INTEREST_STARTERS = ["Basketball", "Soccer", "Hiking", "Cooking", "Art", "Games"] as const
+
 export const FLOW_STEPS: { id: FlowStepId; title: string }[] = [
   { id: "about", title: "About you" },
   { id: "reach", title: "How you want to be reached" },

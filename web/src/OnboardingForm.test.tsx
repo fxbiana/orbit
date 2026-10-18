@@ -259,6 +259,33 @@ it("merges Spotify suggestions into grouped preferences and leaves about fields 
   expect(screen.getByLabelText("Age")).toHaveValue(27)
 })
 
+it("keeps a comma inside a Spotify artist name", async () => {
+  vi.mocked(getOnboarding).mockResolvedValue(null)
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        genres: ["Tyler, The Creator", "Steve Lacy"],
+        suggestions: { knows: ["Tyler, The Creator", "Steve Lacy"], wants_to_learn: [] },
+      }),
+    })),
+  )
+  render(<OnboardingForm getToken={async () => "session-token"} />)
+
+  expect(await screen.findByRole("heading", { name: "About you" })).toBeInTheDocument()
+  fillAbout()
+  fireEvent.click(screen.getByRole("button", { name: "Next" }))
+  fireEvent.click(screen.getByRole("button", { name: "Next" }))
+  fireEvent.click(screen.getByRole("button", { name: "Basketball" }))
+  fireEvent.click(screen.getByRole("button", { name: "Suggest from Spotify" }))
+
+  expect(await screen.findByText("Spotify suggested: Tyler, The Creator, Steve Lacy")).toBeInTheDocument()
+  expect(screen.getByLabelText("Preferences you already have")).toHaveValue(
+    "Basketball, Tyler, The Creator, Steve Lacy",
+  )
+})
+
 it("keeps typed preferences when Spotify import fails", async () => {
   vi.mocked(getOnboarding).mockResolvedValue(null)
   vi.stubGlobal(
