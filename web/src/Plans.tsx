@@ -3,9 +3,11 @@ import {
   ACTIVITY_TYPES,
   createPlan,
   joinPlan,
+  listPlanMatches,
   listPlans,
   sessionToken,
   type ActivityType,
+  type Match,
   type Plan,
 } from "./api"
 
@@ -13,6 +15,7 @@ const ACTIVITY_LABELS: Record<ActivityType, string> = {
   coffee: "Coffee",
   study: "Study",
   workshop: "Workshop",
+  show: "Show",
   other: "Other",
 }
 
@@ -33,6 +36,21 @@ function formatWhen(value: string | null): string | null {
   })
 }
 
+function planShareUrl(planId: string): string {
+  return `${window.location.origin}/?plan=${encodeURIComponent(planId)}`
+}
+
+function viewerInPlan(plan: Plan): boolean {
+  return plan.viewer_joined === true || plan.joined === true
+}
+
+function compatibilityLine(match: Match): string {
+  const name = match.first_name.trim() || "Someone"
+  const reason = match.matched_on.find((item) => item.trim())
+  const score = match.compatibility_score
+  return reason ? `${name} · ${reason} · ${score}` : `${name} · ${score}`
+}
+
 export function Plans({ getToken }: { getToken: () => Promise<string | null> }) {
   const [plans, setPlans] = useState<Plan[]>([])
   const [available, setAvailable] = useState(true)
@@ -40,10 +58,12 @@ export function Plans({ getToken }: { getToken: () => Promise<string | null> }) 
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [title, setTitle] = useState("")
-  const [activityType, setActivityType] = useState<ActivityType>("coffee")
+  const [activityType, setActivityType] = useState<ActivityType>("show")
   const [locationText, setLocationText] = useState("")
   const [startsAt, setStartsAt] = useState("")
   const [capacity, setCapacity] = useState("")
+  const [fitLines, setFitLines] = useState<Record<string, string>>({})
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   async function refresh() {
     const token = await sessionToken(getToken)
@@ -69,6 +89,49 @@ export function Plans({ getToken }: { getToken: () => Promise<string | null> }) 
       cancelled = true
     }
   }, [getToken])
+
+  useEffect(() => {
+    const joined = plans.filter(viewerInPlan)
+    if (joined.length === 0) {
+      setFitLines({})
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const token = await sessionToken(getToken)
+        const next: Record<string, string> = {}
+        await Promise.all(
+          joined.map(async (plan) => {
+            try {
+              const matches = await listPlanMatches(token, plan.id)
+              const top = matches?.[0]
+              if (!top) return
+              next[plan.id] = compatibilityLine(top)
+            } catch {
+              /* Matches stay off the card when the viewer has no profile. */
+            }
+          }),
+        )
+        if (!cancelled) setFitLines(next)
+      } catch {
+        if (!cancelled) setFitLines({})
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [plans, getToken])
+
+  async function copyShare(planId: string) {
+    const url = planShareUrl(planId)
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopiedId(planId)
+    } catch {
+      setCopiedId(null)
+    }
+  }
 
   async function onCreate(event: FormEvent) {
     event.preventDefault()
@@ -112,7 +175,7 @@ export function Plans({ getToken }: { getToken: () => Promise<string | null> }) 
       setLocationText("")
       setStartsAt("")
       setCapacity("")
-      setActivityType("coffee")
+      setActivityType("show")
       await refresh()
     } catch {
       setAvailable(false)
@@ -146,9 +209,7 @@ export function Plans({ getToken }: { getToken: () => Promise<string | null> }) 
   return (
     <section className="plans">
       <h2>Open plans</h2>
-      <p className="note">
-        Post something nearby — coffee, a study session, a workshop — and leave a seat for someone in your orbit.
-      </p>
+      <p className="note">Posting a show leaves a seat for someone in your orbit.</p>
 
       <form className="plan-form" onSubmit={onCreate}>
         <label htmlFor="plan-title">
@@ -220,10 +281,12 @@ export function Plans({ getToken }: { getToken: () => Promise<string | null> }) 
       <ul className="plan-list">
         {plans.map((plan) => {
           const when = formatWhen(plan.starts_at)
-          const alreadyJoined = plan.viewer_joined === true || plan.joined === true
+          const alreadyJoined = viewerInPlan(plan)
+          const shareUrl = planShareUrl(plan.id)
+          const fit = fitLines[plan.id]
           return (
-            <li key={plan.id} className="plan">
-              <div>
+            <li key={plan.id} className="plan" style={{ alignItems: "flex-start" }}>
+              <div style={{ flex: "1 1 16rem", minWidth: 0 }}>
                 <h3>{plan.title}</h3>
                 <p className="meta">
                   {activityLabel(plan.activity_type)} · {plan.location_text}
@@ -231,15 +294,30 @@ export function Plans({ getToken }: { getToken: () => Promise<string | null> }) 
                   {plan.capacity != null ? ` · up to ${plan.capacity}` : ""}
                   {plan.member_count != null ? ` · ${plan.member_count} joined` : ""}
                 </p>
+                {fit ? <p className="meta">{fit}</p> : null}
+                <label className="meta" htmlFor={`plan-share-${plan.id}`}>
+                  Come with me
+                  <input
+                    id={`plan-share-${plan.id}`}
+                    readOnly
+                    value={shareUrl}
+                    style={{ width: "100%" }}
+                  />
+                </label>
               </div>
-              <button
-                type="button"
-                className="ghost"
-                disabled={alreadyJoined || busyId === plan.id}
-                onClick={() => onJoin(plan.id)}
-              >
-                {alreadyJoined ? "Joined" : busyId === plan.id ? "Joining…" : "Join"}
-              </button>
+              <div className="actions">
+                <button type="button" className="ghost" onClick={() => copyShare(plan.id)}>
+                  {copiedId === plan.id ? "Copied" : "Come with me"}
+                </button>
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={alreadyJoined || busyId === plan.id}
+                  onClick={() => onJoin(plan.id)}
+                >
+                  {alreadyJoined ? "Joined" : busyId === plan.id ? "Joining…" : "Join"}
+                </button>
+              </div>
             </li>
           )
         })}

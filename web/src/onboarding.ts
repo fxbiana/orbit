@@ -38,6 +38,21 @@ export const ONBOARDING_LIMITS = {
   list: 20,
 }
 
+export const CITIES = [
+  "Seattle",
+  "Portland",
+  "San Francisco",
+  "Los Angeles",
+  "Austin",
+  "Denver",
+  "Chicago",
+  "New York",
+  "Boston",
+  "Toronto",
+  "Vancouver",
+  "London",
+] as const
+
 export const GATHERING_SIZES = [
   { value: "2-5", label: "2-5 people" },
   { value: "6-15", label: "6-15 people" },
@@ -103,12 +118,12 @@ export const PREFERENCE_GROUP_LABELS = {
 } as const
 
 export const FLOW_STEPS: { id: FlowStepId; title: string }[] = [
+  { id: "about", title: "About you" },
   { id: "reach", title: "How you want to be reached" },
   { id: "preferences", title: "Your preferences" },
-  { id: "about", title: "About you" },
 ]
 
-export type FlowStepId = "reach" | "preferences" | "about"
+export type FlowStepId = "about" | "reach" | "preferences"
 
 export function cleanText(value: string): string {
   return value.trim().replace(/\s+/g, " ")
@@ -177,9 +192,8 @@ function aboutProblem(input: OnboardingInput): string | null {
     return "First name can be at most 80 characters."
   }
   const location = cleanText(input.location)
-  if (!location) return "Enter a location."
-  if (location.length > ONBOARDING_LIMITS.location) {
-    return "Location can be at most 80 characters."
+  if (!CITIES.some((city) => city.toLocaleLowerCase() === location.toLocaleLowerCase())) {
+    return "Choose a city."
   }
   if (!Number.isInteger(input.age)) return "Enter your age."
   if (input.age < ONBOARDING_LIMITS.ageMin || input.age > ONBOARDING_LIMITS.ageMax) {

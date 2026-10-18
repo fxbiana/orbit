@@ -37,14 +37,26 @@ beforeEach(() => {
   vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", "pk_test_example")
 })
 
-it("shows sign-in, sign-up, and the later extension sample", () => {
+it("shows sign-in, sign-up, and a way to try a Seattle profile", () => {
   render(<App />)
 
   expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Sign up" })).toBeInTheDocument()
   expect(screen.getByRole("heading", { name: "Where Worlds Connect" })).toBeInTheDocument()
-  expect(screen.getByRole("heading", { name: "Save the page you already have open." })).toBeInTheDocument()
-  expect(screen.getByLabelText("Sample of the future extension popup")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Try a Seattle profile" })).toBeInTheDocument()
+  expect(screen.queryByRole("heading", { name: "Save the page you already have open." })).not.toBeInTheDocument()
+  expect(screen.queryByLabelText("Sample of the future extension popup")).not.toBeInTheDocument()
+})
+
+it("still offers the Seattle demo when the Clerk key is missing", () => {
+  vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", "")
+  render(<App />)
+
+  expect(screen.getByRole("heading", { name: "Add the Clerk publishable key to web/.env, then restart the site." })).toBeInTheDocument()
+  expect(screen.getByRole("heading", { name: "Where Worlds Connect" })).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Try a Seattle profile" })).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "Sign in" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "Sign up" })).not.toBeInTheDocument()
 })
 
 it("keeps the signed-in desk free of the later extension sample", () => {
@@ -56,4 +68,5 @@ it("keeps the signed-in desk free of the later extension sample", () => {
   expect(screen.getByRole("button", { name: "Contact ways" })).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Manage account" })).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "Try a Seattle profile" })).not.toBeInTheDocument()
 })

@@ -453,6 +453,37 @@ def _spotify_ref(clerk_user_id: str):
     )
 
 
+def _meta_ref(clerk_user_id: str):
+    return (
+        firestore_client()
+        .collection("users")
+        .document(clerk_user_id)
+        .collection("profile")
+        .document("meta")
+    )
+
+
+def save_meta_snapshot(clerk_user_id: str, languages: list[str]) -> dict:
+    """Store normalized languages only. OAuth tokens never go in this document."""
+    payload = {
+        "languages": list(languages),
+        "imported_at": datetime.now(timezone.utc),
+        "source": "clerk_meta",
+    }
+    try:
+        _meta_ref(clerk_user_id).set(payload)
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Firestore meta write failed")
+        abort(503, description="Firestore request failed")
+    return {
+        "languages": payload["languages"],
+        "imported_at": _iso(payload["imported_at"]),
+        "source": payload["source"],
+    }
+
+
 def save_spotify_snapshot(clerk_user_id: str, genres: list[str]) -> dict:
     """Store normalized genres only. OAuth tokens never go in this document."""
     payload = {

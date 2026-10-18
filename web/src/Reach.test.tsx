@@ -95,7 +95,7 @@ it("shows social links only after a connection is accepted", async () => {
     "https://instagram.com/luis.plays",
   )
   expect(screen.getByText("Luis prefers Instagram.")).toBeInTheDocument()
-  expect(screen.getByText("I answer Instagram at night.")).toBeInTheDocument()
+  expect(screen.queryByText("I answer Instagram at night.")).not.toBeInTheDocument()
   expect(await screen.findByText("Thursday at the library?")).toBeInTheDocument()
   expect(screen.getByText("Want to learn tabla?")).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Accept" })).toBeInTheDocument()

@@ -1,6 +1,7 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from "react"
 import { getContact, getOnboarding, saveContact, saveOnboarding, sessionToken } from "./api"
 import { Matches } from "./Matches"
+import { NearbyEvents } from "./NearbyEvents"
 import { Plans } from "./Plans"
 import {
   ContactForm,
@@ -12,6 +13,7 @@ import {
   type LinkStatus,
 } from "./Reach"
 import {
+  CITIES,
   FLOW_STEPS,
   GATHERING_SIZES,
   ONBOARDING_LIMITS,
@@ -27,6 +29,8 @@ import {
   type Knowledge,
   type OnboardingInput,
 } from "./onboarding"
+import { SpotifyConnect } from "./SpotifyConnect"
+import { importMeta } from "./meta"
 import { importSpotify } from "./spotify"
 
 type TopicDraft = { knows: string; wants: string }
@@ -181,6 +185,9 @@ export function OnboardingForm({
   const [spotifySummary, setSpotifySummary] = useState<string | null>(null)
   const [spotifyError, setSpotifyError] = useState<string | null>(null)
   const [spotifyBusy, setSpotifyBusy] = useState(false)
+  const [metaBusy, setMetaBusy] = useState(false)
+  const [metaSummary, setMetaSummary] = useState<string | null>(null)
+  const [metaError, setMetaError] = useState<string | null>(null)
   const onLinks = useCallback((next: Record<string, LinkStatus>) => {
     setLinks(next)
   }, [])
@@ -301,6 +308,26 @@ export function OnboardingForm({
     }
   }
 
+  async function suggestFromMeta() {
+    setMetaError(null)
+    setMetaBusy(true)
+    try {
+      const result = await importMeta(getToken)
+      setDraft((current) => ({
+        ...current,
+        languages: {
+          knows: mergeCommaList(current.languages.knows, result.suggestions.knows),
+          wants: mergeCommaList(current.languages.wants, result.suggestions.wants_to_learn),
+        },
+      }))
+      setMetaSummary(`Meta suggested: ${result.languages.join(", ")}`)
+    } catch (err) {
+      setMetaError(err instanceof Error ? err.message : "Meta import failed")
+    } finally {
+      setMetaBusy(false)
+    }
+  }
+
   async function finish(event: FormEvent) {
     event.preventDefault()
     const input = toInput(draft)
@@ -340,6 +367,7 @@ export function OnboardingForm({
         />
         {profilePanel}
         <Reach getToken={getToken} refreshKey={reachKey} onLinks={onLinks} />
+        <NearbyEvents getToken={getToken} />
         <Plans getToken={getToken} />
         {extras ? (
           <details className="tickets">
@@ -369,20 +397,81 @@ export function OnboardingForm({
         ))}
       </div>
       <h2>{step.title}</h2>
-      {step.id === "reach" ? (
-        <p className="note">
-          You choose what to share: Instagram, Discord, Snapchat, or Facebook. Nothing here is scraped.
-          Spotify comes on the next screen.
-        </p>
-      ) : null}
-      {step.id === "preferences" ? (
-        <p className="note">
-          Hobbies, places, interests, and festivals go in one list. Separate items with commas. Where
-          you live is on the next screen.
-        </p>
-      ) : null}
       {step.id === "about" ? (
-        <p className="note">Orbit does not pull your name or location from connected accounts.</p>
+        <p className="note">Orbit does not pull your name or city from connected accounts.</p>
+      ) : null}
+      {step.id === "reach" ? (
+        <p className="note">Usernames are optional. Spotify and Meta suggestions come next.</p>
+      ) : null}
+      {step.id === "preferences" ? <p className="note">Separate items with commas.</p> : null}
+
+      {step.id === "about" ? (
+        <>
+          <label htmlFor="username">
+            User name
+            <input
+              id="username"
+              name="username"
+              value={draft.username}
+              autoComplete="nickname"
+              onChange={(event) => setDraft((current) => ({ ...current, username: event.target.value }))}
+            />
+          </label>
+          <label htmlFor="first-name">
+            First name
+            <input
+              id="first-name"
+              name="given-name"
+              value={draft.firstName}
+              autoComplete="given-name"
+              onChange={(event) => setDraft((current) => ({ ...current, firstName: event.target.value }))}
+            />
+          </label>
+          <label htmlFor="age">
+            Age
+            <input
+              id="age"
+              name="age"
+              type="number"
+              inputMode="numeric"
+              min={ONBOARDING_LIMITS.ageMin}
+              max={ONBOARDING_LIMITS.ageMax}
+              value={draft.age}
+              onChange={(event) => setDraft((current) => ({ ...current, age: event.target.value }))}
+            />
+          </label>
+          <label htmlFor="location">
+            City
+            <select
+              id="location"
+              name="location"
+              value={CITIES.some((city) => city === draft.location) ? draft.location : ""}
+              onChange={(event) => setDraft((current) => ({ ...current, location: event.target.value }))}
+            >
+              <option value="">Choose a city</option>
+              {CITIES.map((city) => (
+                <option key={city} value={city}>
+                  {city}
+                </option>
+              ))}
+            </select>
+          </label>
+          <fieldset className="choices">
+            <legend>Group size you want</legend>
+            {GATHERING_SIZES.map((size) => (
+              <label key={size.value} className="choice">
+                <input
+                  type="radio"
+                  name="gathering-size"
+                  value={size.value}
+                  checked={draft.gatheringSize === size.value}
+                  onChange={() => setDraft((current) => ({ ...current, gatheringSize: size.value }))}
+                />
+                {size.label}
+              </label>
+            ))}
+          </fieldset>
+        </>
       ) : null}
 
       {step.id === "reach" ? <ReachFields draft={contact} onChange={setContact} /> : null}
@@ -421,6 +510,7 @@ export function OnboardingForm({
               onChange={(event) => updatePreferences("wants", event.target.value)}
             />
           </label>
+          <SpotifyConnect />
           <button
             type="button"
             className="ghost"
@@ -431,69 +521,11 @@ export function OnboardingForm({
           </button>
           {spotifySummary ? <p className="note">{spotifySummary}</p> : null}
           {spotifyError ? <p className="error">{spotifyError}</p> : null}
-        </>
-      ) : null}
-
-      {step.id === "about" ? (
-        <>
-          <label htmlFor="username">
-            User name
-            <input
-              id="username"
-              name="username"
-              value={draft.username}
-              autoComplete="nickname"
-              onChange={(event) => setDraft((current) => ({ ...current, username: event.target.value }))}
-            />
-          </label>
-          <label htmlFor="first-name">
-            First name
-            <input
-              id="first-name"
-              name="given-name"
-              value={draft.firstName}
-              autoComplete="given-name"
-              onChange={(event) => setDraft((current) => ({ ...current, firstName: event.target.value }))}
-            />
-          </label>
-          <label htmlFor="age">
-            Age
-            <input
-              id="age"
-              name="age"
-              type="number"
-              inputMode="numeric"
-              min={ONBOARDING_LIMITS.ageMin}
-              max={ONBOARDING_LIMITS.ageMax}
-              value={draft.age}
-              onChange={(event) => setDraft((current) => ({ ...current, age: event.target.value }))}
-            />
-          </label>
-          <label htmlFor="location">
-            Location
-            <input
-              id="location"
-              name="location"
-              value={draft.location}
-              autoComplete="address-level2"
-              onChange={(event) => setDraft((current) => ({ ...current, location: event.target.value }))}
-            />
-          </label>
-          <fieldset className="choices">
-            <legend>Group size you want</legend>
-            {GATHERING_SIZES.map((size) => (
-              <label key={size.value} className="choice">
-                <input
-                  type="radio"
-                  name="gathering-size"
-                  value={size.value}
-                  checked={draft.gatheringSize === size.value}
-                  onChange={() => setDraft((current) => ({ ...current, gatheringSize: size.value }))}
-                />
-                {size.label}
-              </label>
-            ))}
-          </fieldset>
+          <button type="button" className="ghost" disabled={metaBusy} onClick={() => void suggestFromMeta()}>
+            {metaBusy ? "Suggesting…" : "Suggest languages from Meta"}
+          </button>
+          {metaSummary ? <p className="note">{metaSummary}</p> : null}
+          {metaError ? <p className="error">{metaError}</p> : null}
         </>
       ) : null}
 

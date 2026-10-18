@@ -65,6 +65,10 @@ def fetch_top_artist_genres(access_token: str, opener=urllib.request.urlopen) ->
         with opener(request, timeout=15) as response:
             raw = response.read()
     except urllib.error.HTTPError as exc:
+        if exc.code == 403:
+            raise SpotifyImportError(
+                "Spotify is connected, but user-top-read is missing. Add that scope on the Clerk Spotify connection."
+            ) from exc
         raise SpotifyImportError(
             f"Spotify top artists request failed ({exc.code})"
         ) from exc

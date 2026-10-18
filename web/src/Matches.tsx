@@ -19,8 +19,6 @@ function gatheringLabel(value: string): string {
 
 function leadItem(profile: MatchPerson): string | null {
   return (
-    profile.matched_on.find((item) => item.toLocaleLowerCase() === "knows dance") ??
-    profile.matched_on.find((item) => item.toLocaleLowerCase().includes("dance")) ??
     profile.matched_on.find((item) => item.startsWith("Knows ")) ??
     profile.matched_on.find((item) => item.startsWith("Wants ")) ??
     null
@@ -229,8 +227,8 @@ export function Matches({
             : people.length === 0
               ? "No one else has a profile yet. When someone finishes theirs, they will show up here."
               : people.length > PAGE_SIZE
-                ? `Start with the closest four. ${range}, highest score first. 40 points when they know something you want to learn. City, gathering size, and age add the rest, up to 100.`
-                : `Start with the person at the top. ${people.length} shown, highest score first. 40 points when they know something you want to learn. City, gathering size, and age add the rest, up to 100.`}
+                ? `Start with the closest four. ${range}, highest score first.`
+                : `Start with the person at the top. ${people.length} shown, highest score first.`}
       </p>
       {error ? <p className="error">Could not load people. {error}</p> : null}
       {top ? (

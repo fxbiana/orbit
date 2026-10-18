@@ -95,7 +95,7 @@ def test_fetch_top_artist_genres_http_error():
     def opener(request, timeout=None):
         raise HTTPError(request.full_url, 403, "Forbidden", hdrs=None, fp=BytesIO(b""))
 
-    with pytest.raises(SpotifyImportError, match="403"):
+    with pytest.raises(SpotifyImportError, match="user-top-read"):
         fetch_top_artist_genres("spotify-token", opener=opener)
 
 

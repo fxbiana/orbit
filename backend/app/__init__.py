@@ -14,9 +14,11 @@ def create_app(config_override: dict | None = None) -> Flask:
     CORS(app, resources={r"/api/*": {"origins": app.config["CORS_ORIGINS"]}})
 
     from app.routes.connections import bp as connections_bp
+    from app.routes.events import bp as events_bp
     from app.routes.contact import bp as contact_bp
     from app.routes.health import bp as health_bp
     from app.routes.matches import bp as matches_bp
+    from app.routes.meta import bp as meta_bp
     from app.routes.onboarding import bp as onboarding_bp
     from app.routes.plans import bp as plans_bp
     from app.routes.spotify import bp as spotify_bp
@@ -24,10 +26,12 @@ def create_app(config_override: dict | None = None) -> Flask:
 
     app.register_blueprint(health_bp)
     app.register_blueprint(matches_bp)
+    app.register_blueprint(meta_bp)
     app.register_blueprint(onboarding_bp)
     app.register_blueprint(plans_bp)
     app.register_blueprint(spotify_bp)
     app.register_blueprint(tickets_bp)
+    app.register_blueprint(events_bp)
     app.register_blueprint(contact_bp)
     app.register_blueprint(connections_bp)
 
