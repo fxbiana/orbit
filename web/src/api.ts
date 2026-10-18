@@ -138,3 +138,26 @@ export function joinPlan(token: string, planId: string) {
     body: "{}",
   })
 }
+
+export type SpotifySnapshot = {
+  user_id: string
+  genres: string[]
+  suggested_interests: {
+    knows: string[]
+    wants_to_learn: string[]
+  }
+  source: string
+  artist_count: number
+  imported_at: string | null
+}
+
+export function getSpotify(token: string) {
+  return request<SpotifySnapshot>("/api/spotify", token)
+}
+
+export function importSpotify(token: string) {
+  return request<SpotifySnapshot>("/api/spotify/import", token, {
+    method: "POST",
+    body: "{}",
+  })
+}
