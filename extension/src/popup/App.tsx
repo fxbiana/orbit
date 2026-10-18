@@ -7,6 +7,7 @@ import {
   useAuth,
 } from "@clerk/chrome-extension"
 import { useEffect, useState } from "react"
+import { cacheInboxInvites } from "../inviteSession"
 import { readActiveTab } from "../tabs"
 import { createTicket, sessionToken, webAppUrl } from "./api"
 
@@ -115,10 +116,19 @@ function SignedInApp() {
   useEffect(() => {
     let cancelled = false
     getToken()
-      .then((value) => {
+      .then(async (value) => {
         if (cancelled) return
-        if (!value) setError("No session token")
-        else setReady(true)
+        if (!value) {
+          setError("No session token")
+          return
+        }
+        setReady(true)
+        try {
+          const fresh = await sessionToken(getToken)
+          if (!cancelled) await cacheInboxInvites(fresh)
+        } catch {
+          // A failed refresh leaves no new summaries, so the banner stays hidden.
+        }
       })
       .catch((err: Error) => {
         if (!cancelled) setError(err.message)

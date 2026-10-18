@@ -2,7 +2,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import type { ReactNode } from "react"
 import { beforeEach, expect, it, vi } from "vitest"
 import { App, TicketPanel } from "./App"
-import { createTicket } from "./api"
+import { INVITE_SUMMARY_STORAGE_KEY } from "../invites"
+import { createTicket, listInboxInvites } from "./api"
 import { OnboardingForm } from "./OnboardingForm"
 import { readActiveTab } from "../tabs"
 
@@ -37,6 +38,7 @@ vi.mock("./api", async () => {
     createTicket: vi.fn(),
     getOnboarding: vi.fn(),
     saveOnboarding: vi.fn(),
+    listInboxInvites: vi.fn().mockResolvedValue([]),
     sessionToken: async (getToken: () => Promise<string | null>) => {
       const token = await getToken()
       if (!token) throw new Error("No session token")
@@ -55,6 +57,8 @@ beforeEach(() => {
   vi.mocked(readActiveTab).mockReset()
   vi.mocked(readActiveTab).mockResolvedValue(tab)
   vi.mocked(createTicket).mockReset()
+  vi.mocked(listInboxInvites).mockReset()
+  vi.mocked(listInboxInvites).mockResolvedValue([])
 })
 
 it("starts on a prefilled about-you page", async () => {
@@ -116,6 +120,46 @@ it("shows sign-in and sign-up when signed out", async () => {
   expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Sign up" })).toBeInTheDocument()
   expect(readActiveTab).not.toHaveBeenCalled()
+})
+
+it("caches inbox invite summaries after the popup signs in", async () => {
+  vi.mocked(listInboxInvites).mockResolvedValue([
+    {
+      id: "inv-1",
+      plan_id: "plan-1",
+      plan_title: "Friday market",
+      from_user_id: "user-a",
+      to_user_id: "user-b",
+      from_first_name: "Mina",
+      status: "pending",
+      note: "",
+      created_at: "2026-10-18T15:00:00Z",
+      token: "session-token",
+    } as Awaited<ReturnType<typeof listInboxInvites>>[number],
+  ])
+
+  render(<App />)
+
+  expect(await screen.findByRole("button", { name: "Save to Orbit" })).toBeInTheDocument()
+  await waitFor(async () => {
+    const stored = await chrome.storage.session.get(INVITE_SUMMARY_STORAGE_KEY)
+    expect(stored[INVITE_SUMMARY_STORAGE_KEY]).toEqual([
+      {
+        id: "inv-1",
+        plan_id: "plan-1",
+        plan_title: "Friday market",
+        from_user_id: "user-a",
+        to_user_id: "user-b",
+        from_first_name: "Mina",
+        status: "pending",
+        note: "",
+        created_at: "2026-10-18T15:00:00Z",
+      },
+    ])
+  })
+  expect(listInboxInvites).toHaveBeenCalledWith("session-token")
+  const stored = await chrome.storage.session.get(null)
+  expect(JSON.stringify(stored)).not.toContain("session-token")
 })
 
 it("shows an error when the session has no token", async () => {
