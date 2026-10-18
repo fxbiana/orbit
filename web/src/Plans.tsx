@@ -220,7 +220,7 @@ export function Plans({ getToken }: { getToken: () => Promise<string | null> }) 
       <ul className="plan-list">
         {plans.map((plan) => {
           const when = formatWhen(plan.starts_at)
-          const alreadyJoined = plan.viewer_joined === true || plan.joined === true
+          const alreadyJoined = plan.viewer_joined === true
           return (
             <li key={plan.id} className="plan">
               <div>

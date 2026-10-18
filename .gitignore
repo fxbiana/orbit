@@ -8,6 +8,7 @@ __pycache__/
 .mypy_cache/
 *.egg-info/
 node_modules/
+.vite/
 extension/dist/
 *.pem
 *-firebase-adminsdk-*.json
