@@ -2,7 +2,7 @@
 
 Audience: SE implementing the next layers. Sources of truth: `AGENTS.md` (Product decisions locked), `backend/app/onboarding.py`, `backend/app/firebase.py`, ticket/onboarding routes, `web/src/sampleProfiles.ts` scoring.
 
-**Status:** Additive collections below are **design only** — not implemented. Do not break existing onboarding or tickets.
+**Status:** Onboarding, tickets, matches, and **Open Plans** are implemented on this branch. Events / attendance / connections / Spotify below remain **design only**. Do not break existing onboarding, tickets, matches, or plans.
 
 ---
 
@@ -103,9 +103,17 @@ One document per user. `PUT` creates or replaces (keeps `created_at`). `GET` 404
 
 ---
 
-### Compatibility scoring (reference — client sample today)
+### Matches — shipped on this branch
 
-Implemented in `web/src/sampleProfiles.ts` as `compatibilityWith(viewer, candidate)`. Real peer matches should follow the same semantics.
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET | `/api/matches` | Clerk | Optional `limit` (default 10, max 50). 404 if caller has no onboarding. |
+
+Peers: `list_onboarding_peers` — collection-group scan on `profile` docs named `onboarding`, excludes caller. Response items: `user_id`, `username`, `first_name`, `location`, `age`, `gathering_size`, `compatibility_score`, `matched_on`. Scoring: `backend/app/matching.py` (port of `web/src/sampleProfiles.ts` `compatibilityWith`). Web `Matches.tsx` calls `listMatches`; falls back to local samples if the API errors or returns an empty list.
+
+### Compatibility scoring (reference)
+
+Server and sample client share the same semantics.
 
 **Per topic (bidirectional):**
 
@@ -146,7 +154,9 @@ North star: preference compatibility → shared event intent → consented conne
 
 ---
 
-## 3. Additive schema proposal (not implemented)
+## 3. Additive schema
+
+Open Plans (§3.5) are **shipped**. Events / attendance / connections / Spotify / optional ticket `event_id` remain proposals unless noted.
 
 ### 3.1 Events — `events/{eventId}`
 
@@ -285,7 +295,82 @@ Do not remove or rename `title`, `url`, `status`, `created_at`.
 
 ---
 
-### 3.5 Optional Spotify snapshot — `users/{userId}/profile/spotify`
+### 3.5 Open Plans — `plans/{planId}` (**shipped on this branch**)
+
+**Status:** Implemented for the Orbit hackathon demo on `cursor/orbit-mvp-3955`. Validation: `backend/app/plans.py`. I/O: `backend/app/firebase.py`. Routes: `backend/app/routes/plans.py`. Web: `web/src/Plans.tsx`. Prefer this over full `events` + attendance for P0 “shared intent.”
+
+Hackathon stand-in for “we’re actually meeting”: a user-created plan with explicit members. Does **not** replace canonical events (Ticketmaster later). Does **not** replace connections (friend graph). Does **not** overload tickets.
+
+**Invariants (aligned with AGENTS):**
+
+| Rule | Meaning |
+| --- | --- |
+| Match ≠ membership | High score never auto-joins a plan |
+| Ticket ≠ plan | Saving a URL does not create a plan or attendance |
+| Website = brain | Create / list / join on site via Flask |
+| Caller from auth | `host_id` / join identity = `g.user_id` only |
+| Extend, don’t rewrite | Top-level `plans` collection; onboarding + tickets intact |
+
+**Paths:**
+
+```
+plans/{planId}
+plans/{planId}/members/{userId}
+```
+
+**Plan document** (as stored / returned)
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `title` | string | required, trimmed, max **120** |
+| `activity_type` | string | required: `coffee` \| `study` \| `workshop` \| `other` |
+| `location_text` | string | required, trimmed, max **80** |
+| `starts_at` | string \| null | optional ISO datetime string |
+| `capacity` | int | default **6**; range **2–40** |
+| `status` | string | **`open`** \| **`closed`**; default `open` on create |
+| `host_id` | string | Clerk user id; set server-side on create |
+| `created_at` | timestamp | server |
+| `updated_at` | timestamp | server |
+
+`planId` = server UUID. Reject unexpected body fields; never trust body `host_id` / `user_id` as caller.
+
+**API response extras:** `member_count`, `viewer_joined`; detail also includes `members[]`.
+
+**Member document** (`members/{userId}`)
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `role` | string | **`host`** \| **`member`** |
+| `joined_at` | timestamp | server |
+
+- On create: write plan + host member (`role=host`).  
+- Join: only if `status == open` and under `capacity`; **409** if already joined, closed, or full.  
+- Leave / close endpoints: not required for P0 (not shipped).  
+- `GET /api/plans/<id>/matches`: load other members’ onboarding profiles, run `rank_matches`.
+
+**Routes (shipped)**
+
+| Method | Path | Auth | Body / notes |
+| --- | --- | --- | --- |
+| GET | `/api/plans` | Clerk | Open plans, newest first (`status == open` + `order_by created_at`) |
+| POST | `/api/plans` | Clerk | `{ title, activity_type, location_text, starts_at?, capacity? }` → 201 |
+| GET | `/api/plans/<plan_id>` | Clerk | Plan + members |
+| POST | `/api/plans/<plan_id>/join` | Clerk | 201 plan; 409 closed / full / already joined |
+| GET | `/api/plans/<plan_id>/matches` | Clerk | Ranked member compatibility; 404 if caller has no onboarding |
+
+**Indexes**
+
+| Query | Approach |
+| --- | --- |
+| Open plans newest first | Composite: `status` ASC, `created_at` DESC — create in Firebase if the first list fails |
+| Members of plan | Subcollection list — no composite index |
+
+**Relation to events (Next)**
+
+Open Plans are the demo-sized “shared intent” surface. Canonical `events/{eventId}` + attendance remain the product **Next** layer for Ticketmaster-scale discovery. Do not rename tickets to plans. Do not store plan membership inside onboarding topics.
+---
+
+### 3.6 Optional Spotify snapshot — `users/{userId}/profile/spotify`
 
 Separate document; **no OAuth tokens** in Firestore.
 
@@ -302,7 +387,10 @@ Flow (later): Clerk Spotify external account → Flask import with user token fr
 ### Path map (target)
 
 ```
-events/{eventId}
+plans/{planId}                               # Open Plans (shipped)
+plans/{planId}/members/{userId}
+
+events/{eventId}                             # Next (canonical events)
 events/{eventId}/attendees/{userId}          # mirror (proposed)
 
 users/{userId}/tickets/{ticketId}           # + optional event_id
@@ -419,7 +507,9 @@ Reject: same accept endpoint family with `reject`. Messaging / deeper contact ga
 
 ---
 
-## 5. API sketch (proposed — not shipped)
+## 5. API sketch
+
+Matches and Open Plans below are **shipped**. Events / attendance / connections remain proposed.
 
 Style: blueprint under `backend/app/routes/`, `@bp.get|post|put|delete` then `@caller_required`, JSON in/out, caller = `g.user_id`.
 
@@ -462,11 +552,21 @@ Style: blueprint under `backend/app/routes/`, `@bp.get|post|put|delete` then `@c
 | POST | `/api/tickets` | Clerk | `{ title, url, event_id? }` | `event_id` optional; ignore unknown until implemented |
 | PATCH | `/api/tickets/<id>` | Clerk | `{ "event_id": "..."\|null }` | proposed; ownership check |
 
-### Matches (when moving off sample)
+### Matches (shipped; optional filters later)
 
 | Method | Path | Auth | Query | Response |
 | --- | --- | --- | --- | --- |
-| GET | `/api/matches` | Clerk | `event_id?`, `min_score?` | ranked peers; optional event filter |
+| GET | `/api/matches` | Clerk | `limit?` (shipped); later `event_id?`, `min_score?` | ranked peers; limited fields |
+
+### Open Plans (shipped — see §3.5)
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET | `/api/plans` | Clerk | open plans newest first |
+| POST | `/api/plans` | Clerk | create + host member |
+| GET | `/api/plans/<id>` | Clerk | detail + members |
+| POST | `/api/plans/<id>/join` | Clerk | join if open and under capacity |
+| GET | `/api/plans/<id>/matches` | Clerk | rank members vs caller |
 
 ### Spotify (later)
 
@@ -493,10 +593,17 @@ Style: blueprint under `backend/app/routes/`, `@bp.get|post|put|delete` then `@c
 
 ---
 
-## 7. Handoff checklist (events next)
+## 7. Handoff checklist
 
-- [ ] Read `AGENTS.md` → Product decisions (locked) + this doc.
-- [ ] Leave `onboarding.py` validation and ticket create fields unchanged unless adding **optional** `event_id`.
+### Orbit demo — first (mostly shipped; prove live)
+
+- [ ] Read `AGENTS.md` → Product decisions (locked) + this doc + [`JAGMAN_FEASIBILITY.md`](JAGMAN_FEASIBILITY.md).
+- [ ] Run `seed_profiles.py`; confirm matches UI shows API source.
+- [ ] Smoke Open Plans (§3.5): create + join + list; add Firestore composite index if list query fails.
+- [ ] Leave `onboarding.py` validation and ticket fields unchanged.
+
+### Events next (after demo path)
+
 - [ ] Add `events` collection + seed script (city + `starts_at`); deploy composite indexes before production queries.
 - [ ] Implement attendance write path: user subcollection **and** attendee mirror (or document CG query choice).
 - [ ] Website-first UX: list events by `profile.location`, mark interested/going.
@@ -528,10 +635,18 @@ Resolve with product before coding edge cases; defaults suggested in italics.
 | Area | Path |
 | --- | --- |
 | Locked product decisions | `AGENTS.md` |
+| Feasibility (Jagman) | `docs/JAGMAN_FEASIBILITY.md` |
+| Pitch gap map | `docs/ORBIT_GAP_MAP.md` |
 | Onboarding validation | `backend/app/onboarding.py` |
-| Firestore ticket/onboarding I/O | `backend/app/firebase.py` |
+| Firestore ticket/onboarding/peers I/O | `backend/app/firebase.py` |
+| Matching / rank | `backend/app/matching.py` |
+| Matches route | `backend/app/routes/matches.py` |
+| Open Plans validation | `backend/app/plans.py` |
+| Open Plans routes | `backend/app/routes/plans.py` |
 | Ticket routes | `backend/app/routes/tickets.py` |
 | Onboarding routes | `backend/app/routes/onboarding.py` |
 | Auth / `g.user_id` | `backend/app/auth.py` |
-| Sample scoring | `web/src/sampleProfiles.ts` → `compatibilityWith` |
+| Sample scoring (client reference) | `web/src/sampleProfiles.ts` → `compatibilityWith` |
+| Matches / plans client | `web/src/api.ts` → `listMatches`, `listPlans`, `createPlan`, `joinPlan` |
+| Plans UI | `web/src/Plans.tsx` |
 | Blueprint registration | `backend/app/__init__.py` |
