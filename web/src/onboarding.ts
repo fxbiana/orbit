@@ -188,13 +188,9 @@ export function validateFlowStep(step: FlowStepId, input: OnboardingInput): stri
   if (step === "reach") return null
   if (step === "about") return aboutProblem(input)
 
-  const languages = PROFILE_FIELDS.find((field) => field.key === "languages")
-  if (!languages) return null
-  const languageProblem = topicProblem(input.languages, languages.knows, languages.wants)
-  if (languageProblem) return languageProblem
-  return topicProblem(
-    input.interests,
-    PREFERENCE_GROUP_LABELS.knows,
-    PREFERENCE_GROUP_LABELS.wants,
-  )
+  for (const field of PROFILE_FIELDS) {
+    const problem = topicProblem(input[field.key], field.knows, field.wants)
+    if (problem) return problem
+  }
+  return null
 }

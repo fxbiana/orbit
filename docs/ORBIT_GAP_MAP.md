@@ -17,7 +17,7 @@ Pitch claims vs branch `cursor/orbit-mvp-3955` (including parallel work on this 
 | Shared event intent via Ticketmaster events | **Design only** | Later | Events ≠ tickets; Ticketmaster = ingest |
 | Mark going / interested on events | **Not coded** | Later | Manual attendance is source of truth |
 | Friend / connect request → accept | **Not coded** | Later | Match ≠ friend |
-| Spotify genres → interests | **Code present** | — | `POST /api/spotify/import` suggests chips; the user confirms by saving onboarding. Optional model via `AI_API_KEY`. |
+| Spotify listening → topic chips | **Code present** | — | `POST /api/spotify/import` suggests the five topics; the user confirms by saving onboarding. Optional model via `AI_API_KEY`. |
 | Purchase-page heuristics | **Out of scope** | — | Never auto-write attendance |
 | Push / notification fan-out | **Out of scope** | — | Extension does not own notifications |
 

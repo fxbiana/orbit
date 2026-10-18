@@ -148,7 +148,7 @@ Match list visibility (locked product): score + limited fields (name, location, 
 | **Extend, don’t rewrite** | Keep onboarding + tickets shapes. Add collections beside them. |
 | **No second DB** | Firestore only. No Postgres/SQLite. |
 | **Caller from auth** | `g.user_id` only. Reject body `user_id` as caller. |
-| **Spotify optional** | No audio-features / recommendations / related-artists dependency. Map genres into existing `interests` topic after user confirm. |
+| **Spotify optional** | No new topic key. No audio-features / recommendations / related-artists dependency. Suggestions may fill the existing five topics (interests, festivals, locations, hobbies, languages); the user confirms before `PUT /api/onboarding`. |
 
 North star: preference compatibility → shared event intent → consented connection.
 
@@ -638,7 +638,7 @@ Style: blueprint under `backend/app/routes/`, `@bp.get|post|put|delete` then `@c
 - [ ] Connections after (or in parallel with) people-for-event: pending → accept/reject; pair-id uniqueness.
 - [ ] Tests: auth on all new routes; isolation by `g.user_id`; attendance upsert; connect accept authorization.
 - [ ] Ticketmaster later: map into same event fields; no second model.
-- [ ] Spotify import is shipped (`POST /api/spotify/import`). Chips are still confirmed by `PUT /api/onboarding`.
+- [x] Spotify import is shipped (`POST /api/spotify/import`). Chips are still confirmed by `PUT /api/onboarding`.
 
 ---
 
