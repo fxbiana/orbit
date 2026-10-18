@@ -62,6 +62,36 @@ Root `.env`, read by the API:
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | already set | `http://localhost:5000` |
 
+## Docker
+
+Docker Desktop is enough. From the repo root, after both env files exist and `FIREBASE_CREDENTIALS_PATH` is the absolute path of the service account JSON, with ports 5000 and 5173 free:
+
+```bash
+docker compose up --build
+```
+
+That starts two containers. The API container runs `flask --debug` on port 5000. The reloader polls the bind-mounted `backend/` tree, so saving a Python file restarts the process. The extension container runs Vite on port 5173 and writes `extension/dist` on the host. Load that folder once as an unpacked extension. A later save is picked up by polling, and the dev server refreshes the popup.
+
+Leave `VITE_API_BASE_URL` at `http://localhost:5000`. Chrome is outside Docker and uses the published port.
+
+`GET /health` and `GET /ready` are the same checks as below. `docker compose ps` shows both containers healthy once Vite is listening.
+
+`docker compose restart api` re-reads the root `.env`. `docker compose restart extension` re-reads `extension/.env`. A different `FIREBASE_CREDENTIALS_PATH` needs `docker compose up` again, because that path is the file mounted into the API container. After a `package-lock.json` or `requirements.txt` change, run `docker compose up --build` again.
+
+Seed the sample profiles once the extension container has logged that Vite is ready. The seed command uses that container's Linux `node_modules`:
+
+```bash
+docker compose exec api python seed_profiles.py
+```
+
+Tests:
+
+```bash
+docker compose exec api pytest
+```
+
+`docker compose down` stops the containers and keeps the `node_modules` volume. The next sections are the same run, without Docker.
+
 ## API
 
 ```bash

@@ -1,0 +1,68 @@
+# One command starts the API and the extension dev server.
+# Saving a file under backend/ restarts the API process.
+# Saving a file under extension/ refreshes the popup through the Vite dev server.
+
+name: ticket-trapper
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    init: true
+    ports:
+      - "5000:5000"
+    environment:
+      FIREBASE_CREDENTIALS_PATH: /run/secrets/firebase.json
+    volumes:
+      - ./backend:/workspace/backend
+      - ./extension:/workspace/extension
+      - extension_node_modules:/workspace/extension/node_modules
+      - ./.env:/workspace/.env:ro
+      - type: bind
+        source: ${FIREBASE_CREDENTIALS_PATH:?Set FIREBASE_CREDENTIALS_PATH in the root .env}
+        target: /run/secrets/firebase.json
+        read_only: true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health')",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 8s
+
+  extension:
+    build:
+      context: ./extension
+      dockerfile: Dockerfile
+    init: true
+    tty: true
+    ports:
+      - "5173:5173"
+    environment:
+      DOCKER: "1"
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "300"
+    volumes:
+      - ./extension:/app
+      - extension_node_modules:/app/node_modules
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const n=require('net');const s=n.connect(5173,'127.0.0.1',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 40s
+
+volumes:
+  extension_node_modules:

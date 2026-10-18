@@ -1,0 +1,15 @@
+.git
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.venv
+backend/.venv
+node_modules
+extension/node_modules
+extension/dist
+.env
+extension/.env
+*.pem
+*-firebase-adminsdk-*.json
+service-account*.json
