@@ -13,7 +13,22 @@ vi.mock("@clerk/react", () => ({
   },
   SignInButton: () => <button type="button">Sign in</button>,
   SignUpButton: () => <button type="button">Sign up</button>,
-  UserButton: () => <button type="button">Account</button>,
+  UserButton: Object.assign(
+    ({ children }: { children?: ReactNode }) => (
+      <div>
+        {children}
+        <button type="button">Account</button>
+      </div>
+    ),
+    {
+      MenuItems: ({ children }: { children?: ReactNode }) => <>{children}</>,
+      Action: ({ label, onClick }: { label: string; onClick?: () => void }) => (
+        <button type="button" onClick={onClick}>
+          {label === "manageAccount" ? "Manage account" : label === "signOut" ? "Sign out" : label}
+        </button>
+      ),
+    },
+  ),
   useAuth: () => ({ getToken: async () => "session-token" }),
 }))
 
@@ -38,4 +53,7 @@ it("keeps the signed-in desk free of the later extension sample", () => {
 
   expect(screen.queryByRole("heading", { name: "The extension saves the tab you already have open." })).not.toBeInTheDocument()
   expect(screen.getByText("Loading your session...")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Contact ways" })).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Manage account" })).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument()
 })

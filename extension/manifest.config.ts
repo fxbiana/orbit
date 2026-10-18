@@ -21,6 +21,6 @@ export default defineManifest({
     service_worker: "src/background/index.ts",
     type: "module",
   },
-  permissions: ["storage", "activeTab"],
+  permissions: ["activeTab"],
   host_permissions: ["http://localhost:5000/*", "https://*.clerk.accounts.dev/*"],
 })

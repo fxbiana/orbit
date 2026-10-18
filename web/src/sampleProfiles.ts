@@ -4,11 +4,6 @@ export type SamplePerson = OnboardingInput & {
   id: string
 }
 
-export type SampleProfile = SamplePerson & {
-  compatibility_score: number
-  matched_on: string[]
-}
-
 const FIRST_NAMES = [
   "Amira", "Noah", "Priya", "Leo", "Sofia", "Arjun", "Maya", "Jonah", "Leila", "Owen",
   "Anika", "Hugo", "Mei", "Samir", "Clara", "Ravi", "Nora", "Idris", "Hana", "Felix",
@@ -49,20 +44,6 @@ const FILLER_WANTS: Record<TopicKey, readonly string[]> = {
   hobbies: ["Tabla", "Gardening", "Baking", "Cycling"],
   interests: ["Travel", "Food", "Architecture", "Theatre"],
   festivals: ["Thanksgiving", "Vaisakhi", "Eid", "Carnival"],
-}
-
-/** The person the sample scores are measured against. They want to learn dance. */
-export const VIEWER_PROFILE: OnboardingInput = {
-  username: "you",
-  first_name: "You",
-  location: "Seattle",
-  age: 28,
-  gathering_size: "6-15",
-  languages: { knows: ["English", "Hindi"], wants_to_learn: ["Spanish"] },
-  locations: { knows: ["Seattle"], wants_to_learn: ["Chandigarh"] },
-  hobbies: { knows: ["Cooking"], wants_to_learn: ["Dance"] },
-  interests: { knows: ["Classical music"], wants_to_learn: ["Folk dance"] },
-  festivals: { knows: ["Diwali"], wants_to_learn: ["Holi"] },
 }
 
 function emptyTopics(): Record<TopicKey, { knows: string[]; wants_to_learn: string[] }> {
@@ -203,72 +184,4 @@ function buildPerson(index: number): SamplePerson {
   return person
 }
 
-function overlap(wanted: readonly string[], known: readonly string[]): string[] {
-  const knownByKey = new Map(known.map((item) => [item.toLocaleLowerCase(), item]))
-  const hits: string[] = []
-  const seen = new Set<string>()
-  for (const item of wanted) {
-    const key = item.toLocaleLowerCase()
-    if (seen.has(key)) continue
-    const match = knownByKey.get(key)
-    if (!match) continue
-    seen.add(key)
-    hits.push(match)
-  }
-  return hits
-}
-
-export function compatibilityWith(
-  viewer: OnboardingInput,
-  candidate: OnboardingInput,
-): { score: number; matched_on: string[] } {
-  const matchedOn: string[] = []
-  let teachHits = 0
-  let learnHits = 0
-
-  for (const topic of TOPIC_KEYS) {
-    for (const item of overlap(viewer[topic].wants_to_learn, candidate[topic].knows)) {
-      teachHits += 1
-      matchedOn.push(`Knows ${item}`)
-    }
-    for (const item of overlap(viewer[topic].knows, candidate[topic].wants_to_learn)) {
-      learnHits += 1
-      matchedOn.push(`Wants ${item}`)
-    }
-  }
-
-  let score = 0
-  if (teachHits > 0) score += 40 + Math.min(teachHits - 1, 3) * 10
-  score += Math.min(learnHits, 2) * 6
-
-  const viewerCity = viewer.location.toLocaleLowerCase()
-  if (viewerCity && candidate.location.toLocaleLowerCase() === viewerCity) {
-    score += 12
-    matchedOn.push(`Lives in ${candidate.location}`)
-  }
-  if (viewer.gathering_size && candidate.gathering_size === viewer.gathering_size) {
-    score += 8
-    matchedOn.push(`Gathering ${candidate.gathering_size}`)
-  }
-  const ageDelta = Math.abs(viewer.age - candidate.age)
-  if (ageDelta <= 5) {
-    score += 10
-    matchedOn.push("Similar age")
-  } else if (ageDelta <= 12) {
-    score += 4
-  }
-
-  return { score: Math.min(100, score), matched_on: matchedOn }
-}
-
 export const SAMPLE_PEOPLE: SamplePerson[] = Array.from({ length: 100 }, (_, index) => buildPerson(index))
-
-export function sampleProfilesFor(viewer: OnboardingInput): SampleProfile[] {
-  return SAMPLE_PEOPLE.map((person) => {
-    const match = compatibilityWith(viewer, person)
-    return { ...person, compatibility_score: match.score, matched_on: match.matched_on }
-  }).sort((a, b) => b.compatibility_score - a.compatibility_score || a.first_name.localeCompare(b.first_name))
-}
-
-/** One hundred people, scored against {@link VIEWER_PROFILE}. Highest score first. */
-export const SAMPLE_PROFILES: SampleProfile[] = sampleProfilesFor(VIEWER_PROFILE)

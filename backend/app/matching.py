@@ -1,16 +1,16 @@
 """Peer compatibility scoring.
 
-Port of ``compatibilityWith`` in ``web/src/sampleProfiles.ts``. Compares one
-user's ``knows`` with another's ``wants_to_learn`` on the same topics, then
-adds location, gathering size, and age bonuses.
+Languages compare only to languages. Hobbies, locations, interests, and
+festivals are one preference pool: ``knows`` and ``wants_to_learn`` are
+combined before overlap, so an item counts once. Location, gathering size,
+and age add the remaining points.
 """
 
 from __future__ import annotations
 
-from app.onboarding import TOPIC_KEYS
-
 DEFAULT_MATCH_LIMIT = 10
 MAX_MATCH_LIMIT = 50
+PREFERENCE_TOPICS = ("hobbies", "locations", "interests", "festivals")
 
 
 def _topic_sides(profile: dict, topic: str) -> tuple[list[str], list[str]]:
@@ -23,6 +23,28 @@ def _topic_sides(profile: dict, topic: str) -> tuple[list[str], list[str]]:
         [item for item in knows if isinstance(item, str)],
         [item for item in wants if isinstance(item, str)],
     )
+
+
+def _unique(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    unique: list[str] = []
+    for item in items:
+        key = item.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(item)
+    return unique
+
+
+def _pooled(profile: dict, topics: tuple[str, ...]) -> tuple[list[str], list[str]]:
+    knows: list[str] = []
+    wants: list[str] = []
+    for topic in topics:
+        topic_knows, topic_wants = _topic_sides(profile, topic)
+        knows.extend(topic_knows)
+        wants.extend(topic_wants)
+    return _unique(knows), _unique(wants)
 
 
 def overlap(wanted: list[str], known: list[str]) -> list[str]:
@@ -48,9 +70,9 @@ def compatibility_with(viewer: dict, candidate: dict) -> dict:
     teach_hits = 0
     learn_hits = 0
 
-    for topic in TOPIC_KEYS:
-        viewer_knows, viewer_wants = _topic_sides(viewer, topic)
-        candidate_knows, candidate_wants = _topic_sides(candidate, topic)
+    for topics in (("languages",), PREFERENCE_TOPICS):
+        viewer_knows, viewer_wants = _pooled(viewer, topics)
+        candidate_knows, candidate_wants = _pooled(candidate, topics)
         for item in overlap(viewer_wants, candidate_knows):
             teach_hits += 1
             matched_on.append(f"Knows {item}")

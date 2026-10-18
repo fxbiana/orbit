@@ -147,7 +147,7 @@ export function Plans({ getToken }: { getToken: () => Promise<string | null> }) 
     <section className="plans">
       <h2>Open plans</h2>
       <p className="note">
-        Post something nearby — coffee, study, a workshop — and invite people from your orbit.
+        Post something nearby — coffee, a study session, a workshop — and leave a seat for someone in your orbit.
       </p>
 
       <form className="plan-form" onSubmit={onCreate}>
@@ -220,7 +220,7 @@ export function Plans({ getToken }: { getToken: () => Promise<string | null> }) 
       <ul className="plan-list">
         {plans.map((plan) => {
           const when = formatWhen(plan.starts_at)
-          const alreadyJoined = plan.viewer_joined === true || plan.joined === true
+          const alreadyJoined = plan.viewer_joined === true
           return (
             <li key={plan.id} className="plan">
               <div>

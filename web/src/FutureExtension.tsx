@@ -5,9 +5,9 @@ export function FutureExtension() {
         <p className="eyebrow">Later</p>
         <h2 id="later-title">Save the page you already have open.</h2>
         <ol>
-          <li>Same Clerk account as Orbit on the web.</li>
-          <li>It reads the title and URL of the current tab.</li>
-          <li>It posts that page into your Orbit saved list.</li>
+          <li>Uses the same account as Orbit on the web.</li>
+          <li>Reads the title and URL of the tab you have open.</li>
+          <li>Saves that page to your list.</li>
         </ol>
       </div>
       <article className="popup-sample" aria-label="Sample of the future extension popup">

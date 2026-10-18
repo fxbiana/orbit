@@ -35,3 +35,5 @@ class Config:
     CLERK_AUTHORIZED_PARTIES = env_csv("CLERK_AUTHORIZED_PARTIES", DEFAULT_ORIGINS)
     CORS_ORIGINS = env_csv("CORS_ORIGINS", DEFAULT_ORIGINS)
     FIREBASE_CREDENTIALS_PATH = os.environ.get("FIREBASE_CREDENTIALS_PATH", "")
+    AI_API_KEY = os.environ.get("AI_API_KEY", "")
+    AI_MODEL = os.environ.get("AI_MODEL", "")

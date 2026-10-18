@@ -1,8 +1,8 @@
 # Schema & workflow brief (events, attendance, connections)
 
-Audience: SE implementing the next layers. Sources of truth: `AGENTS.md` (Product decisions locked), `backend/app/onboarding.py`, `backend/app/firebase.py`, ticket/onboarding routes, `web/src/sampleProfiles.ts` scoring.
+Audience: SE implementing the next layers. Sources of truth: `AGENTS.md` (Product decisions locked), `backend/app/onboarding.py`, `backend/app/firebase.py`, ticket/onboarding routes, `backend/app/matching.py`.
 
-**Status:** Onboarding, tickets, matches, and **Open Plans** are implemented on this branch. Events / attendance / connections / Spotify below remain **design only**. Do not break existing onboarding, tickets, matches, or plans.
+**Status:** Onboarding, tickets, matches, **Open Plans**, contact links, connections, and Spotify import are implemented. Events / attendance remain **design only**. Do not break existing onboarding, tickets, matches, plans, contact, or connections.
 
 ---
 
@@ -109,7 +109,7 @@ One document per user. `PUT` creates or replaces (keeps `created_at`). `GET` 404
 | --- | --- | --- | --- |
 | GET | `/api/matches` | Clerk | Optional `limit` (default 10, max 50). 404 if caller has no onboarding. |
 
-Peers: `list_onboarding_peers` — collection-group scan on `profile` docs named `onboarding`, excludes caller. Response items: `user_id`, `username`, `first_name`, `location`, `age`, `gathering_size`, `compatibility_score`, `matched_on`. Scoring: `backend/app/matching.py` (port of `web/src/sampleProfiles.ts` `compatibilityWith`). Web `Matches.tsx` calls `listMatches`; falls back to local samples if the API errors or returns an empty list.
+Peers: `list_onboarding_peers` — collection-group scan on `profile` docs named `onboarding`, excludes caller. Response items: `user_id`, `username`, `first_name`, `location`, `age`, `gathering_size`, `compatibility_score`, `matched_on`. Scoring: `backend/app/matching.py`. Web `Matches.tsx` calls `listMatches` and shows that list. An empty list or an API error stays empty; it does not fall back to local samples.
 
 ### Compatibility scoring (reference)
 
@@ -148,7 +148,7 @@ Match list visibility (locked product): score + limited fields (name, location, 
 | **Extend, don’t rewrite** | Keep onboarding + tickets shapes. Add collections beside them. |
 | **No second DB** | Firestore only. No Postgres/SQLite. |
 | **Caller from auth** | `g.user_id` only. Reject body `user_id` as caller. |
-| **Spotify optional** | No audio-features / recommendations / related-artists dependency. Map genres into existing `interests` topic after user confirm. |
+| **Spotify optional** | No new topic key. No audio-features / recommendations / related-artists dependency. Suggestions may fill the existing five topics (interests, festivals, locations, hobbies, languages); the user confirms before `PUT /api/onboarding`. |
 
 North star: preference compatibility → shared event intent → consented connection.
 
@@ -156,7 +156,7 @@ North star: preference compatibility → shared event intent → consented conne
 
 ## 3. Additive schema
 
-Open Plans (§3.5) are **shipped**. Events / attendance / connections / Spotify / optional ticket `event_id` remain proposals unless noted.
+Open Plans (§3.5), contact links (§3.7), connections (§3.3), and Spotify import (§3.6) are **shipped**. Events / attendance / optional ticket `event_id` remain proposals unless noted.
 
 ### 3.1 Events — `events/{eventId}`
 
@@ -232,7 +232,11 @@ events/{eventId}/attendees/{userId}
 
 ### 3.3 Connections / requests
 
-Consent edge ≠ match score. Propose **directed request** with a stable pair key for uniqueness.
+**Status:** Shipped. Consent edge ≠ match score.
+
+`connectionId` is the first 24 hex characters of SHA-256 over the sorted user ids joined by a NUL byte. Clerk ids contain `_`, so joining the raw ids with `_` can collide. Messages live at `connections/{connectionId}/messages/{messageId}` and are readable only when `status` is `accepted` and the caller is one of the two people. Social handles are not stored on the connection.
+
+The pair-key sketch below is the original proposal. The shipped id is the hash described above. Re-request after `rejected` is allowed and reuses the same id.
 
 **Path (proposed):**
 
@@ -352,7 +356,7 @@ plans/{planId}/members/{userId}
 
 | Method | Path | Auth | Body / notes |
 | --- | --- | --- | --- |
-| GET | `/api/plans` | Clerk | Open plans, newest first (`status == open` + `order_by created_at`) |
+| GET | `/api/plans` | Clerk | Open plans, newest first (`status == open`, then sorted in the API) |
 | POST | `/api/plans` | Clerk | `{ title, activity_type, location_text, starts_at?, capacity? }` → 201 |
 | GET | `/api/plans/<plan_id>` | Clerk | Plan + members |
 | POST | `/api/plans/<plan_id>/join` | Clerk | 201 plan; 409 closed / full / already joined |
@@ -362,7 +366,7 @@ plans/{planId}/members/{userId}
 
 | Query | Approach |
 | --- | --- |
-| Open plans newest first | Composite: `status` ASC, `created_at` DESC — create in Firebase if the first list fails |
+| Open plans newest first | Equality on `status` only. The API sorts by `created_at`, so no composite index |
 | Members of plan | Subcollection list — no composite index |
 
 **Relation to events (Next)**
@@ -370,17 +374,28 @@ plans/{planId}/members/{userId}
 Open Plans are the demo-sized “shared intent” surface. Canonical `events/{eventId}` + attendance remain the product **Next** layer for Ticketmaster-scale discovery. Do not rename tickets to plans. Do not store plan membership inside onboarding topics.
 ---
 
-### 3.6 Optional Spotify snapshot — `users/{userId}/profile/spotify`
+### 3.6 Optional Spotify snapshot — `users/{userId}/profile/spotify` (**shipped**)
 
-Separate document; **no OAuth tokens** in Firestore.
+Separate document. OAuth tokens are not stored.
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `genres` | string[] | normalized, capped (e.g. 20 × 80) |
+| `genres` | string[] | normalized labels from top-artist genres |
+| `artists` | object[] | `{name, genres}` |
+| `tracks` | object[] | recent plays: `name`, `artists`, `album`, `played_at` |
+| `top_tracks` | object[] | short-term top tracks |
+| `suggestions` | object | five topic objects (`languages`, `locations`, `hobbies`, `interests`, `festivals`), each `{knows, wants_to_learn}` |
+| `model` | string | model name; empty when fallback suggestions are used |
 | `imported_at` | timestamp | |
-| `source` | string | e.g. `clerk_spotify` |
+| `source` | string | `clerk_spotify` |
 
-Flow (later): Clerk Spotify external account → Flask import with user token from Clerk → suggest chips into `interests.knows` / `interests.wants_to_learn` → user confirms → `PUT /api/onboarding`. Do not add a sixth topic key. No Spotify audio-features / recommendations APIs.
+Flow (shipped): Clerk Spotify token → Flask fetch of recent tracks plus short-term top artists and tracks → suggestions into the existing five topics → user confirms → existing `PUT /api/onboarding`. Import does not write onboarding. No sixth topic. No audio-features, recommendations, or related-artists.
+
+---
+
+### 3.7 Contact links — `users/{userId}/profile/contact` (**shipped**)
+
+Optional document beside onboarding. Usernames only (Instagram, Discord, Snapchat), a preferred channel (`instagram` | `discord` | `snapchat` | `orbit`), and a short `reach_note`. `GET /api/contact` returns blanks and does not write when the document is missing. The match list does not include these fields. Another person sees them only on an **accepted** connection.
 
 ---
 
@@ -395,11 +410,13 @@ events/{eventId}/attendees/{userId}          # mirror (proposed)
 
 users/{userId}/tickets/{ticketId}           # + optional event_id
 users/{userId}/profile/onboarding            # unchanged
+users/{userId}/profile/contact               # social usernames (shipped)
 users/{userId}/profile/spotify               # optional snapshot
 users/{userId}/attendance/{eventId}          # interested | going
 users/{userId}/friends/{otherUserId}         # optional denorm on accept
 
-connections/{connectionId}                  # pending | accepted | rejected
+connections/{connectionId}                  # pending | accepted | rejected (shipped)
+connections/{connectionId}/messages/{messageId}  # after accept only
 ```
 
 ---
@@ -503,13 +520,13 @@ Web A (requester)     Flask                    Firestore              Web B (rec
  |<-- (optional notify later) ----------------|                         |
 ```
 
-Reject: same accept endpoint family with `reject`. Messaging / deeper contact gated on `accepted` once that surface exists.
+Reject: same accept endpoint family with `reject`. Messages and social links are gated on `accepted`.
 
 ---
 
 ## 5. API sketch
 
-Matches and Open Plans below are **shipped**. Events / attendance / connections remain proposed.
+Matches, Open Plans, contact, and connections below are **shipped**. Events / attendance remain proposed.
 
 Style: blueprint under `backend/app/routes/`, `@bp.get|post|put|delete` then `@caller_required`, JSON in/out, caller = `g.user_id`.
 
@@ -536,14 +553,23 @@ Style: blueprint under `backend/app/routes/`, `@bp.get|post|put|delete` then `@c
 | --- | --- | --- | --- | --- |
 | GET | `/api/events/<event_id>/people` | Clerk | `status`, `min_score` | ranked limited profiles + score + attendance |
 
-### Connections
+### Contact (shipped — see §3.7)
 
 | Method | Path | Auth | Body | Response |
 | --- | --- | --- | --- | --- |
-| POST | `/api/connections` | Clerk | `{ "to_user_id" }` | 201 pending (409 if exists) |
-| GET | `/api/connections` | Clerk | `?box=inbox\|outbox\|friends` | list |
+| GET | `/api/contact` | Clerk | — | caller contact, or blanks; read does not write |
+| PUT | `/api/contact` | Clerk | usernames, `preferred`, `reach_note` | stored contact |
+
+### Connections (shipped — see §3.3)
+
+| Method | Path | Auth | Body | Response |
+| --- | --- | --- | --- | --- |
+| POST | `/api/connections` | Clerk | `{ "to_user_id", "intro"? }` | 201 pending (409 if pending or accepted) |
+| GET | `/api/connections` | Clerk | `?box=inbox\|outbox\|friends` | list; `contact` is null until accepted |
 | POST | `/api/connections/<id>/accept` | Clerk | — | accepted (403 if not `to_user_id`) |
 | POST | `/api/connections/<id>/reject` | Clerk | — | rejected |
+| GET | `/api/connections/<id>/messages` | Clerk | — | 403 until accepted |
+| POST | `/api/connections/<id>/messages` | Clerk | `{ "text" }` | 201 after accept |
 
 ### Tickets (additive, when linking)
 
@@ -568,11 +594,11 @@ Style: blueprint under `backend/app/routes/`, `@bp.get|post|put|delete` then `@c
 | POST | `/api/plans/<id>/join` | Clerk | join if open and under capacity |
 | GET | `/api/plans/<id>/matches` | Clerk | rank members vs caller |
 
-### Spotify (later)
+### Spotify (shipped)
 
 | Method | Path | Auth | Notes |
 | --- | --- | --- | --- |
-| POST | `/api/spotify/import` | Clerk | writes `profile/spotify`; returns suggested interest chips — does not auto-merge into onboarding |
+| POST | `/api/spotify/import` | Clerk | shipped; writes `profile/spotify`; returns artists, tracks, genres, five-topic suggestions, and model — does not merge into onboarding |
 
 ---
 
@@ -599,7 +625,7 @@ Style: blueprint under `backend/app/routes/`, `@bp.get|post|put|delete` then `@c
 
 - [ ] Read `AGENTS.md` → Product decisions (locked) + this doc + [`JAGMAN_FEASIBILITY.md`](JAGMAN_FEASIBILITY.md).
 - [ ] Run `seed_profiles.py`; confirm matches UI shows API source.
-- [ ] Smoke Open Plans (§3.5): create + join + list; add Firestore composite index if list query fails.
+- [ ] Smoke Open Plans (§3.5): create + join + list. The list query filters `status` and sorts in the API.
 - [ ] Leave `onboarding.py` validation and ticket fields unchanged.
 
 ### Events next (after demo path)
@@ -612,7 +638,7 @@ Style: blueprint under `backend/app/routes/`, `@bp.get|post|put|delete` then `@c
 - [ ] Connections after (or in parallel with) people-for-event: pending → accept/reject; pair-id uniqueness.
 - [ ] Tests: auth on all new routes; isolation by `g.user_id`; attendance upsert; connect accept authorization.
 - [ ] Ticketmaster later: map into same event fields; no second model.
-- [ ] Spotify later: optional; chips → `interests` only after confirm.
+- [x] Spotify import is shipped (`POST /api/spotify/import`). Chips are still confirmed by `PUT /api/onboarding`.
 
 ---
 
@@ -621,7 +647,7 @@ Style: blueprint under `backend/app/routes/`, `@bp.get|post|put|delete` then `@c
 Resolve with product before coding edge cases; defaults suggested in italics.
 
 1. **Who can create events?** Open to any signed-in user vs seed/admin-only. *Hackathon default: allow POST for signed-in users; Ticketmaster ingest is separate.*
-2. **Reject → re-request?** *Allow new pending from either user after reject; block duplicate pending while one exists.*
+2. **Reject → re-request?** Resolved: either person may ask again after reject; a pending or accepted pair stays blocked. The same connection id is reused.
 3. **Going vs interested in people list:** filter both by default, sort `going` first, or query param only?
 4. **Connection requires min match score?** Product says connect among compatible users — *enforce soft UI gate; hard API min score optional.*
 5. **Ticket `event_id` validation:** must reference existing `events/{id}` or allow dangling until event upsert?
@@ -645,8 +671,11 @@ Resolve with product before coding edge cases; defaults suggested in italics.
 | Open Plans routes | `backend/app/routes/plans.py` |
 | Ticket routes | `backend/app/routes/tickets.py` |
 | Onboarding routes | `backend/app/routes/onboarding.py` |
+| Contact links | `backend/app/contact.py`, `backend/app/routes/contact.py` |
+| Connections and messages | `backend/app/connections.py`, `backend/app/routes/connections.py` |
+| Reach UI | `web/src/Reach.tsx` |
 | Auth / `g.user_id` | `backend/app/auth.py` |
-| Sample scoring (client reference) | `web/src/sampleProfiles.ts` → `compatibilityWith` |
+| Sample scoring (extension popup) | `extension/src/popup/sampleProfiles.ts` → `compatibilityWith` |
 | Matches / plans client | `web/src/api.ts` → `listMatches`, `listPlans`, `createPlan`, `joinPlan` |
 | Plans UI | `web/src/Plans.tsx` |
 | Blueprint registration | `backend/app/__init__.py` |
