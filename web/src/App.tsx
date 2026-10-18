@@ -27,9 +27,9 @@ export function App() {
         variables: {
           colorPrimary: "#c4471a",
           colorBackground: "#fff8f3",
-          colorText: "#4a2e24",
-          colorInputBackground: "#fffdfb",
-          colorInputText: "#4a2e24",
+          colorForeground: "#4a2e24",
+          colorInput: "#fffdfb",
+          colorInputForeground: "#4a2e24",
           borderRadius: "10px",
           fontFamily: "Nunito, sans-serif",
         },

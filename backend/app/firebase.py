@@ -266,28 +266,30 @@ def _member_snapshot(plan_id: str, viewer_id: str) -> tuple[int, bool, list[dict
 
 
 def list_open_plans(viewer_id: str) -> list[dict]:
-    """Return open plans newest first, with member_count and viewer_joined."""
+    """Return open plans newest first, with member_count and viewer_joined.
+
+    The status filter uses the automatic single-field index. Sorting happens
+    here so the list does not depend on a composite ``status`` + ``created_at``
+    index.
+    """
     try:
-        docs = (
-            _plans()
-            .where("status", "==", "open")
-            .order_by("created_at", direction=firestore.Query.DESCENDING)
-            .stream()
-        )
-        plans: list[dict] = []
+        docs = list(_plans().where("status", "==", "open").stream())
+        rows = []
         for doc in docs:
             data = doc.to_dict() or {}
             member_count, viewer_joined, _members = _member_snapshot(doc.id, viewer_id)
-            plans.append(
-                plan_response(
-                    doc.id,
-                    data,
-                    _iso,
-                    member_count=member_count,
-                    viewer_joined=viewer_joined,
-                )
+            rows.append((data.get("created_at"), doc.id, data, member_count, viewer_joined))
+        rows.sort(key=lambda item: (item[0] is not None, item[0] or ""), reverse=True)
+        return [
+            plan_response(
+                plan_id,
+                data,
+                _iso,
+                member_count=member_count,
+                viewer_joined=viewer_joined,
             )
-        return plans
+            for _created_at, plan_id, data, member_count, viewer_joined in rows
+        ]
     except HTTPException:
         raise
     except Exception:
