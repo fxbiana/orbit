@@ -27,6 +27,7 @@ it("shows sign-in, sign-up, and the later extension sample", () => {
 
   expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Sign up" })).toBeInTheDocument()
-  expect(screen.getByRole("heading", { name: "The extension saves the tab you already have open." })).toBeInTheDocument()
+  expect(screen.getByRole("heading", { name: "Where Worlds Connect" })).toBeInTheDocument()
+  expect(screen.getByRole("heading", { name: "Save the page you already have open." })).toBeInTheDocument()
   expect(screen.getByLabelText("Sample of the future extension popup")).toBeInTheDocument()
 })

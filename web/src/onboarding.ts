@@ -96,9 +96,9 @@ export const PROFILE_FIELDS: {
 ]
 
 export const FLOW_STEPS: { id: FlowStepId; title: string }[] = [
-  { id: "you", title: "About you" },
-  { id: "where", title: "Where you are" },
-  { id: "gathering", title: "Gathering size" },
+  { id: "you", title: "Who you are" },
+  { id: "where", title: "Where you land" },
+  { id: "gathering", title: "How you gather" },
   ...PROFILE_FIELDS.map((field) => ({ id: field.key, title: field.title })),
 ]
 

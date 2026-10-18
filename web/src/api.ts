@@ -86,3 +86,55 @@ export function listMatches(token: string, limit = 10) {
   const query = new URLSearchParams({ limit: String(limit) })
   return request<{ matches: Match[] }>(`/api/matches?${query}`, token)
 }
+
+export const ACTIVITY_TYPES = ["coffee", "study", "workshop", "other"] as const
+
+export type ActivityType = (typeof ACTIVITY_TYPES)[number]
+
+export type Plan = {
+  id: string
+  title: string
+  activity_type: ActivityType | string
+  location_text: string
+  starts_at: string | null
+  capacity: number | null
+  status?: string
+  host_id?: string
+  member_count?: number
+  /** Preferred API field; some stubs may still send `joined`. */
+  viewer_joined?: boolean
+  joined?: boolean
+}
+
+export type PlanInput = {
+  title: string
+  activity_type: ActivityType
+  location_text: string
+  starts_at?: string
+  capacity?: number
+}
+
+export function listPlans(token: string) {
+  return request<{ plans: Plan[] }>("/api/plans", token)
+}
+
+export function createPlan(token: string, plan: PlanInput) {
+  const body: Record<string, string | number> = {
+    title: plan.title,
+    activity_type: plan.activity_type,
+    location_text: plan.location_text,
+  }
+  if (plan.starts_at) body.starts_at = plan.starts_at
+  if (plan.capacity != null) body.capacity = plan.capacity
+  return request<Plan>("/api/plans", token, {
+    method: "POST",
+    body: JSON.stringify(body),
+  })
+}
+
+export function joinPlan(token: string, planId: string) {
+  return request<Plan>(`/api/plans/${encodeURIComponent(planId)}/join`, token, {
+    method: "POST",
+    body: "{}",
+  })
+}

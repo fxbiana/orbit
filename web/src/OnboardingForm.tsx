@@ -1,6 +1,7 @@
 import { FormEvent, ReactNode, useState } from "react"
 import { saveOnboarding, sessionToken } from "./api"
 import { Matches } from "./Matches"
+import { Plans } from "./Plans"
 import {
   FLOW_STEPS,
   GATHERING_SIZES,
@@ -76,6 +77,7 @@ export function OnboardingForm({
   const [draft, setDraft] = useState<Draft>(() => draftFromProfile(VIEWER_PROFILE))
   const [stepIndex, setStepIndex] = useState(0)
   const [phase, setPhase] = useState<"pages" | "people">("pages")
+  const [viewer, setViewer] = useState<OnboardingInput | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -118,6 +120,7 @@ export function OnboardingForm({
 
     setError(null)
     setSaveError(null)
+    setViewer(input)
     setPhase("people")
     try {
       await saveOnboarding(await sessionToken(getToken), input)
@@ -126,10 +129,11 @@ export function OnboardingForm({
     }
   }
 
-  if (phase === "people") {
+  if (phase === "people" && viewer) {
     return (
       <div className="flow">
-        <Matches viewer={toInput(draft)} />
+        <Matches viewer={viewer} getToken={getToken} />
+        <Plans getToken={getToken} />
         {saveError ? <p className="error">Profile was not saved. {saveError}</p> : null}
         <div className="actions">
           <button
@@ -162,7 +166,10 @@ export function OnboardingForm({
       </p>
       <h2>{step.title}</h2>
       {stepIndex === 0 ? (
-        <p className="note">Filled in so you can click through. Change any answer.</p>
+        <p className="note">
+          Tell Orbit enough to find your people. Answers are filled in so you can click through —
+          change any of them.
+        </p>
       ) : null}
       {topic ? <p className="note">Separate items with commas.</p> : null}
 
@@ -273,7 +280,7 @@ export function OnboardingForm({
           <span />
         )}
         <button type="submit" className="primary">
-          {last ? "See people" : "Next"}
+          {last ? "Find your people" : "Next"}
         </button>
       </div>
     </form>
