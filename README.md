@@ -6,6 +6,26 @@ The popup is React. The API is Flask. Clerk signs the user in. Firestore stores 
 
 `AGENTS.md` is the map of which system owns which data.
 
+## Docker
+
+Copy the env files, set `CLERK_SECRET_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`, and `FIREBASE_CREDENTIALS_PATH` (absolute path of the service account JSON), then from the repo root:
+
+```bash
+docker compose up --build
+```
+
+The API is on port 5000. A save under `backend/` restarts that process. The extension dev server is on port 5173. A save under `extension/` rebuilds `extension/dist`. Load that `dist` directory once in `chrome://extensions`. Later saves refresh the popup through the dev server.
+
+`VITE_API_BASE_URL` stays `http://localhost:5000`. The popup runs in Chrome on the host. A change to either `.env` file is picked up by `docker compose restart api` or `docker compose restart extension`.
+
+After the stack is up, write the 100 sample profiles:
+
+```bash
+docker compose exec api python seed_profiles.py
+```
+
+The manual setup below is the same system without Docker.
+
 ## API
 
 ```bash
