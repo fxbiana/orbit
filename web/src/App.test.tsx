@@ -30,3 +30,11 @@ it("shows sign-in, sign-up, and the later extension sample", () => {
   expect(screen.getByRole("heading", { name: "The extension saves the tab you already have open." })).toBeInTheDocument()
   expect(screen.getByLabelText("Sample of the future extension popup")).toBeInTheDocument()
 })
+
+it("keeps the signed-in desk free of the later extension sample", () => {
+  clerk.signedIn = true
+  render(<App />)
+
+  expect(screen.queryByRole("heading", { name: "The extension saves the tab you already have open." })).not.toBeInTheDocument()
+  expect(screen.getByText("Loading your session...")).toBeInTheDocument()
+})

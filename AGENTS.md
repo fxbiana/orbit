@@ -1,21 +1,23 @@
 # Ticket Trapper
 
-Chrome extension that saves the active tab as a ticket. The popup is React. The API is Flask. Clerk signs the user in. Firestore stores tickets and onboarding profiles.
+Find people who already know what you want to learn. The MVP is the React site in `web/`. The API is Flask. Clerk signs the user in. Firestore stores tickets and onboarding profiles. The Chrome extension in `extension/` is later.
 
 ## Layout
 
-- `extension/` Manifest V3 popup. Vite, React, CRXJS, `@clerk/chrome-extension`.
+- `web/` React website. Vite, React, `@clerk/react`. This is what you run for the MVP.
 - `backend/` Flask application factory. Run it from this directory.
+- `extension/` Manifest V3 popup for later. Vite, React, CRXJS, `@clerk/chrome-extension`.
 - `.env.example` API and Clerk settings. Copy to `.env` at the repo root.
-- `extension/.env.example` Vite settings. Copy to `extension/.env`.
+- `web/.env.example` Vite settings. Copy to `web/.env`.
+- `extension/.env.example` Vite settings when you work on the extension.
 
-The unpacked extension id is `gpnknnpdogpdgeejedabdihnacblhmmj`. The public key in `extension/manifest.config.ts` pins that id. `CORS_ORIGINS` must include `chrome-extension://gpnknnpdogpdgeejedabdihnacblhmmj`.
+The unpacked extension id is `gpnknnpdogpdgeejedabdihnacblhmmj`. The public key in `extension/manifest.config.ts` pins that id. `CORS_ORIGINS` must include the website origin `http://localhost:5174` and, for later, `chrome-extension://gpnknnpdogpdgeejedabdihnacblhmmj`.
 
 ## Who owns what
 
-Clerk owns identity and sessions. The popup calls `getToken()` and sends `Authorization: Bearer`. `caller_required` in `backend/app/auth.py` verifies that token when `AUTH_MODE=clerk` and sets `g.user_id` to the Clerk user id. Read the caller from `g.user_id`. A user id in the JSON body is not the caller. `AUTH_MODE=local` still accepts `X-User-Id` for tests.
+Clerk owns identity and sessions. The website calls `getToken()` and sends `Authorization: Bearer`. `caller_required` in `backend/app/auth.py` verifies that token when `AUTH_MODE=clerk` and sets `g.user_id` to the Clerk user id. Read the caller from `g.user_id`. A user id in the JSON body is not the caller. `AUTH_MODE=local` still accepts `X-User-Id` for tests.
 
-Firestore is the only store, in development and in production. This hackathon uses one Firebase project for both. There is no emulator and no second database. Tickets live at `users/{userId}/tickets/{ticketId}`. Onboarding profiles live at `users/{userId}/profile/onboarding`. The API reads and writes those paths with the Firebase Admin SDK. The extension does not talk to Firestore.
+Firestore is the only store, in development and in production. This hackathon uses one Firebase project for both. There is no emulator and no second database. Tickets live at `users/{userId}/tickets/{ticketId}`. Onboarding profiles live at `users/{userId}/profile/onboarding`. The API reads and writes those paths with the Firebase Admin SDK. The website and the extension do not talk to Firestore.
 
 `FIREBASE_CREDENTIALS_PATH` must point at the service account JSON for any route that reads or writes tickets, and for `GET /ready`. `GET /health` answers with no credentials file.
 
@@ -82,9 +84,13 @@ The profile stores `username`, `first_name`, `location`, `age`, `gathering_size`
 
 The product is the React site in `web/`. Clerk's React SDK signs the user in. The site sends `Authorization: Bearer` to the API. Saving a page is a title and a URL. The onboarding flow and the match list live here.
 
+## Sample profiles
+
+The match list on the website ranks `web/src/sampleProfiles.ts` in the browser. `backend/sample_people.json` is the same 100 people for `python seed_profiles.py`. Seeding Firestore is optional for the MVP demo; the on-site ranking does not read those documents. If the TypeScript generator changes, refresh the JSON before seeding again.
+
 ## Extension, later
 
-`extension/` is the later Chrome extension, not the app you run now. It will read the active tab and save it with the same Clerk session. A static sample of that popup is on the website. Session tokens do not go in `chrome.storage`.
+`extension/` is the later Chrome extension, not the app you run now. It will read the active tab and save it with the same Clerk session. A static sample of that popup is on the signed-out website. Session tokens do not go in `chrome.storage`. Docker does not start the extension.
 
 ## Secrets
 
