@@ -1,8 +1,13 @@
 FROM node:24-bookworm-slim AS nodebin
+RUN npm install -g esbuild \
+    && node --version \
+    && esbuild --version
 
 FROM python:3.12-slim-bookworm
 
 COPY --from=nodebin /usr/local/bin/node /usr/local/bin/node
+COPY --from=nodebin /usr/local/bin/esbuild /usr/local/bin/esbuild
+COPY --from=nodebin /usr/local/lib/node_modules/esbuild /usr/local/lib/node_modules/esbuild
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -12,7 +17,8 @@ WORKDIR /workspace
 
 COPY backend/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt \
-    && node --version
+    && node --version \
+    && esbuild --version
 
 COPY backend /workspace/backend
 
