@@ -103,6 +103,20 @@ it("opens the saved profile and lists people from the match API", async () => {
   expect(screen.queryByText("Showing sample people")).not.toBeInTheDocument()
   expect(screen.queryByRole("heading", { name: "Contact ways" })).not.toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Ask to connect" })).toBeInTheDocument()
+  expect(screen.queryByRole("heading", { name: "Events near you" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("heading", { name: "Open plans" })).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole("button", { name: "Events" }))
+  expect(await screen.findByRole("heading", { name: "Events near you" })).toBeInTheDocument()
+  expect(screen.queryByRole("heading", { name: "Priya, people near you" })).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole("button", { name: "Plans" }))
+  expect(await screen.findByRole("heading", { name: "Open plans" })).toBeInTheDocument()
+  expect(screen.queryByRole("heading", { name: "Events near you" })).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole("button", { name: "Reach" }))
+  expect(screen.getByRole("heading", { name: "Reach" })).toBeInTheDocument()
+  expect(screen.queryByRole("heading", { name: "Open plans" })).not.toBeInTheDocument()
 })
 
 it("starts with Spotify, then you, reach, and preferences", async () => {
@@ -126,7 +140,7 @@ it("starts with Spotify, then you, reach, and preferences", async () => {
   expect(screen.getByRole("heading", { name: "About you" })).toBeInTheDocument()
   expect(screen.getByText("Step 2 of 4")).toBeInTheDocument()
   expect(screen.getByText(/does not pull your name or city/)).toBeInTheDocument()
-  expect(screen.getByRole("button", { name: "Seattle", pressed: true })).toBeInTheDocument()
+  expect(screen.getByLabelText("City")).toHaveValue("Seattle")
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
 
   expect(screen.getByRole("heading", { name: "How you want to be reached" })).toBeInTheDocument()
@@ -189,8 +203,7 @@ function fillAbout() {
   fireEvent.change(screen.getByLabelText("User name"), { target: { value: "priya" } })
   fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Priya" } })
   fireEvent.change(screen.getByLabelText("Age"), { target: { value: "27" } })
-  fireEvent.click(screen.getByRole("button", { name: "United States" }))
-  fireEvent.click(screen.getByRole("button", { name: "Portland" }))
+  fireEvent.change(screen.getByLabelText("City"), { target: { value: "Portland" } })
   fireEvent.click(screen.getByRole("radio", { name: "6-15 people" }))
 }
 
@@ -207,8 +220,7 @@ it("starts a blank form when this account has no profile", async () => {
   expect(screen.getByLabelText("User name")).toHaveValue("")
   expect(screen.getByLabelText("First name")).toHaveValue("")
   expect(screen.getByLabelText("Age")).toHaveValue(null)
-  expect(screen.getByText("Tap a country, then a city.")).toBeInTheDocument()
-  expect(screen.queryByRole("button", { pressed: true })).not.toBeInTheDocument()
+  expect(screen.getByLabelText("City")).toHaveValue("")
   fireEvent.change(screen.getByLabelText("User name"), { target: { value: "priya" } })
   fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Priya" } })
   fireEvent.change(screen.getByLabelText("Age"), { target: { value: "27" } })
@@ -217,8 +229,7 @@ it("starts a blank form when this account has no profile", async () => {
   expect(screen.getByRole("heading", { name: "About you" })).toBeInTheDocument()
   expect(screen.getByText("Choose a city.")).toBeInTheDocument()
 
-  fireEvent.click(screen.getByRole("button", { name: "United States" }))
-  fireEvent.click(screen.getByRole("button", { name: "Portland" }))
+  fireEvent.change(screen.getByLabelText("City"), { target: { value: "Portland" } })
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
   expect(screen.getByRole("heading", { name: "How you want to be reached" })).toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
@@ -289,8 +300,39 @@ it("merges Spotify suggestions into each topic and leaves about fields alone", a
   fireEvent.click(screen.getByRole("button", { name: "Next" }))
   expect(screen.getByLabelText("User name")).toHaveValue("priya")
   expect(screen.getByLabelText("First name")).toHaveValue("Priya")
-  expect(screen.getByRole("button", { name: "Portland", pressed: true })).toBeInTheDocument()
+  expect(screen.getByLabelText("City")).toHaveValue("Portland")
   expect(screen.getByLabelText("Age")).toHaveValue(27)
+})
+
+it("shows five artist cards and skips the artist name list", async () => {
+  vi.mocked(getOnboarding).mockResolvedValue(null)
+  const names = ["KAYTRANADA", "Steve Lacy", "PinkPantheress", "Mac Miller", "Tyler, The Creator", "Drake"]
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        genres: [],
+        artists: names.map((name) => ({ name })),
+        suggestions: {
+          languages: { knows: [], wants_to_learn: [] },
+          locations: { knows: [], wants_to_learn: [] },
+          hobbies: { knows: [], wants_to_learn: [] },
+          interests: { knows: [], wants_to_learn: [] },
+          festivals: { knows: [], wants_to_learn: [] },
+        },
+      }),
+    })),
+  )
+  render(<OnboardingForm getToken={async () => "session-token"} />)
+
+  expect(await screen.findByRole("heading", { name: "Start from Spotify" })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Suggest from Spotify" }))
+  expect(await screen.findByText("Your top artists")).toBeInTheDocument()
+  expect(document.querySelectorAll(".artist-grid li")).toHaveLength(5)
+  expect(screen.getByText("KAYTRANADA")).toBeInTheDocument()
+  expect(screen.queryByText("Drake")).not.toBeInTheDocument()
+  expect(screen.queryByText(/Spotify suggested artists:/)).not.toBeInTheDocument()
 })
 
 it("keeps a comma inside a Spotify artist name", async () => {
@@ -304,6 +346,10 @@ it("keeps a comma inside a Spotify artist name", async () => {
         artists: [
           { name: "Tyler, The Creator", image_url: "https://i.scdn.co/image/tyler" },
           { name: "Steve Lacy", image_url: "https://i.scdn.co/image/steve" },
+          { name: "KAYTRANADA", image_url: "https://i.scdn.co/image/kay" },
+          { name: "PinkPantheress", image_url: "https://i.scdn.co/image/pink" },
+          { name: "Mac Miller", image_url: "https://i.scdn.co/image/mac" },
+          { name: "Drake", image_url: "https://i.scdn.co/image/drake" },
         ],
         suggestions: {
           languages: { knows: [], wants_to_learn: [] },
@@ -321,12 +367,11 @@ it("keeps a comma inside a Spotify artist name", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Suggest from Spotify" }))
   expect(await screen.findByText("Your top artists")).toBeInTheDocument()
   expect(screen.getByText("Tyler, The Creator")).toBeInTheDocument()
-  expect(screen.getByText("Steve Lacy")).toBeInTheDocument()
+  expect(screen.getByText("Mac Miller")).toBeInTheDocument()
+  expect(screen.queryByText("Drake")).not.toBeInTheDocument()
+  expect(screen.queryByText(/Spotify suggested artists:/)).not.toBeInTheDocument()
   const portraits = document.querySelectorAll(".artist-grid img")
-  expect(Array.from(portraits).map((img) => img.getAttribute("src"))).toEqual([
-    "https://i.scdn.co/image/tyler",
-    "https://i.scdn.co/image/steve",
-  ])
+  expect(portraits).toHaveLength(5)
   expect(screen.queryByText(/Spotify suggested:/)).not.toBeInTheDocument()
   fillAbout()
   fireEvent.click(screen.getByRole("button", { name: "Next" }))

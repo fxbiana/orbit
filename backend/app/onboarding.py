@@ -30,6 +30,8 @@ CITIES = (
     "Toronto",
     "Vancouver",
     "London",
+    "Delhi",
+    "Chandigarh",
 )
 TOPIC_ITEM_MAX_LENGTH = 80
 TOPIC_LIST_MAX_ITEMS = 20

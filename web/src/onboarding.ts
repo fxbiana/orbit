@@ -51,6 +51,8 @@ export const CITIES = [
   "Toronto",
   "Vancouver",
   "London",
+  "Delhi",
+  "Chandigarh",
 ] as const
 
 export const GATHERING_SIZES = [

@@ -86,6 +86,16 @@ const EMPTY_CONTACT: ContactDraft = {
 
 const languageField = PROFILE_FIELDS.find((field) => field.key === "languages") ?? PROFILE_FIELDS[0]
 
+const DESK_TABS = [
+  { id: "people", label: "People" },
+  { id: "reach", label: "Reach" },
+  { id: "events", label: "Events" },
+  { id: "plans", label: "Plans" },
+  { id: "pages", label: "Saved pages" },
+] as const
+
+type DeskTab = (typeof DESK_TABS)[number]["id"]
+
 function emptyTopic(): TopicDraft {
   return { knows: "", wants: "" }
 }
@@ -206,6 +216,8 @@ function suggestionItems(suggestions: SpotifySuggestions): string[] {
   return items
 }
 
+const TOP_ARTISTS = 5
+
 function spotifySummaryText(genres: string[], artists: { name: string }[]): string | null {
   const names = new Set(
     artists.map((artist) => artist.name.trim().toLocaleLowerCase()).filter((name) => name.length > 0),
@@ -214,8 +226,7 @@ function spotifySummaryText(genres: string[], artists: { name: string }[]): stri
     artists.length > 0 && genres.length > 0 && genres.every((genre) => names.has(genre.trim().toLocaleLowerCase()))
   if (namedArtists) return null
   if (genres.length > 0) return `Spotify suggested: ${genres.join(", ")}`
-  const visible = artists.map((artist) => artist.name.trim()).filter((name) => name.length > 0)
-  if (visible.length > 0) return `Spotify suggested artists: ${visible.join(", ")}`
+  if (artists.some((artist) => artist.name.trim().length > 0)) return null
   return "Spotify did not find genres to suggest."
 }
 
@@ -277,6 +288,7 @@ export function OnboardingForm({
   const [contact, setContact] = useState<ContactDraft>(EMPTY_CONTACT)
   const [stepIndex, setStepIndex] = useState(0)
   const [phase, setPhase] = useState<"pages" | "people">("pages")
+  const [desk, setDesk] = useState<DeskTab>("people")
   const [viewer, setViewer] = useState<OnboardingInput | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -403,7 +415,9 @@ export function OnboardingForm({
         }
       })
       setSpotifyGenres(result.genres)
-      setSpotifyArtists(result.artists.filter((artist) => artist.name.trim().length > 0))
+      setSpotifyArtists(
+        result.artists.filter((artist) => artist.name.trim().length > 0).slice(0, TOP_ARTISTS),
+      )
       setSpotifySummary(spotifySummaryText(result.genres, result.artists))
     } catch (err) {
       setSpotifyError(err instanceof Error ? err.message : "Spotify import failed")
@@ -466,24 +480,35 @@ export function OnboardingForm({
   }
 
   if (phase === "people" && viewer) {
+    const tabs = DESK_TABS.filter((tab) => tab.id !== "pages" || extras)
     return (
       <div className="flow">
-        <Matches
-          viewer={viewer}
-          getToken={getToken}
-          links={links}
-          onConnected={() => setReachKey((key) => key + 1)}
-        />
-        {profilePanel}
-        <Reach getToken={getToken} refreshKey={reachKey} onLinks={onLinks} />
-        <NearbyEvents getToken={getToken} />
-        <Plans getToken={getToken} />
-        {extras ? (
-          <details className="tickets">
-            <summary>Saved pages</summary>
-            {extras}
-          </details>
+        <nav className="desk-nav" aria-label="Orbit">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={desk === tab.id ? undefined : "ghost"}
+              aria-current={desk === tab.id ? "page" : undefined}
+              onClick={() => setDesk(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+        {desk === "people" ? (
+          <Matches
+            viewer={viewer}
+            getToken={getToken}
+            links={links}
+            onConnected={() => setReachKey((key) => key + 1)}
+          />
         ) : null}
+        {profilePanel}
+        {desk === "reach" ? <Reach getToken={getToken} refreshKey={reachKey} onLinks={onLinks} /> : null}
+        {desk === "events" ? <NearbyEvents getToken={getToken} /> : null}
+        {desk === "plans" ? <Plans getToken={getToken} /> : null}
+        {desk === "pages" && extras ? <div className="tickets">{extras}</div> : null}
       </div>
     )
   }
