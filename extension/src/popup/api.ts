@@ -21,41 +21,45 @@ async function errorMessage(response: Response): Promise<string> {
   return `${response.status}`
 }
 
-async function request<T>(path: string, userId: string, init?: RequestInit): Promise<T> {
+function authHeaders(token: string, extra?: HeadersInit): HeadersInit {
+  return {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+    ...(extra ?? {}),
+  }
+}
+
+async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBase()}${path}`, {
     ...init,
-    headers: {
-      "X-User-Id": userId,
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    headers: authHeaders(token, init?.headers),
   })
   if (!response.ok) throw new Error(await errorMessage(response))
   return response.json() as Promise<T>
 }
 
-export function listTickets(userId: string) {
-  return request<{ tickets: Ticket[] }>("/api/tickets", userId)
+export function listTickets(token: string) {
+  return request<{ tickets: Ticket[] }>("/api/tickets", token)
 }
 
-export function createTicket(userId: string, ticket: { title: string; url: string }) {
-  return request<Ticket>("/api/tickets", userId, {
+export function createTicket(token: string, ticket: { title: string; url: string }) {
+  return request<Ticket>("/api/tickets", token, {
     method: "POST",
     body: JSON.stringify(ticket),
   })
 }
 
-export async function getOnboarding(userId: string): Promise<OnboardingProfile | null> {
+export async function getOnboarding(token: string): Promise<OnboardingProfile | null> {
   const response = await fetch(`${apiBase()}/api/onboarding`, {
-    headers: { "X-User-Id": userId },
+    headers: authHeaders(token),
   })
   if (response.status === 404) return null
   if (!response.ok) throw new Error(await errorMessage(response))
   return response.json() as Promise<OnboardingProfile>
 }
 
-export function saveOnboarding(userId: string, profile: OnboardingInput) {
-  return request<OnboardingProfile>("/api/onboarding", userId, {
+export function saveOnboarding(token: string, profile: OnboardingInput) {
+  return request<OnboardingProfile>("/api/onboarding", token, {
     method: "PUT",
     body: JSON.stringify(profile),
   })

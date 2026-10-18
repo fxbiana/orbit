@@ -1,6 +1,8 @@
-import { FormEvent, useEffect, useState } from "react"
-import { getOnboarding, saveOnboarding } from "./api"
+import { FormEvent, ReactNode, useState } from "react"
+import { saveOnboarding } from "./api"
+import { Matches } from "./Matches"
 import {
+  FLOW_STEPS,
   GATHERING_SIZES,
   ONBOARDING_LIMITS,
   PROFILE_FIELDS,
@@ -8,11 +10,13 @@ import {
   cleanText,
   formatList,
   parseList,
+  validateFlowStep,
   validateOnboarding,
+  type FlowStepId,
   type OnboardingInput,
-  type OnboardingProfile,
   type TopicKey,
 } from "./onboarding"
+import { VIEWER_PROFILE } from "./sampleProfiles"
 
 type TopicDraft = { knows: string; wants: string }
 
@@ -25,13 +29,7 @@ type Draft = {
   topics: Record<TopicKey, TopicDraft>
 }
 
-function blankDraft(): Draft {
-  const topics = {} as Record<TopicKey, TopicDraft>
-  for (const key of TOPIC_KEYS) topics[key] = { knows: "", wants: "" }
-  return { username: "", firstName: "", location: "", age: "", gatheringSize: "", topics }
-}
-
-function draftFromProfile(profile: OnboardingProfile): Draft {
+function draftFromProfile(profile: OnboardingInput): Draft {
   const topics = {} as Record<TopicKey, TopicDraft>
   for (const key of TOPIC_KEYS) {
     topics[key] = {
@@ -43,7 +41,7 @@ function draftFromProfile(profile: OnboardingProfile): Draft {
     username: profile.username,
     firstName: profile.first_name,
     location: profile.location,
-    age: profile.age == null ? "" : String(profile.age),
+    age: String(profile.age),
     gatheringSize: profile.gathering_size,
     topics,
   }
@@ -68,33 +66,17 @@ function toInput(draft: Draft): OnboardingInput {
   return input
 }
 
-export function OnboardingForm({ userId }: { userId: string }) {
-  const [draft, setDraft] = useState<Draft>(blankDraft)
-  const [ready, setReady] = useState(false)
-  const [saving, setSaving] = useState(false)
+export function OnboardingForm({ token, extras }: { token: string; extras?: ReactNode }) {
+  const [draft, setDraft] = useState<Draft>(() => draftFromProfile(VIEWER_PROFILE))
+  const [stepIndex, setStepIndex] = useState(0)
+  const [phase, setPhase] = useState<"pages" | "people">("pages")
   const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
-    getOnboarding(userId)
-      .then((profile) => {
-        if (cancelled) return
-        if (profile) setDraft(draftFromProfile(profile))
-        setReady(true)
-      })
-      .catch((err: Error) => {
-        if (cancelled) return
-        setError(err.message)
-        setReady(true)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [userId])
+  const step = FLOW_STEPS[stepIndex] ?? FLOW_STEPS[0]
+  const topic = PROFILE_FIELDS.find((field) => field.key === step.id)
 
   function updateTopic(key: TopicKey, side: keyof TopicDraft, value: string) {
-    setSaved(false)
     setDraft((current) => ({
       ...current,
       topics: {
@@ -104,127 +86,156 @@ export function OnboardingForm({ userId }: { userId: string }) {
     }))
   }
 
-  async function save(event: FormEvent) {
+  function problemFor(id: FlowStepId): string | null {
+    return validateFlowStep(id, toInput(draft))
+  }
+
+  function goNext(event: FormEvent) {
+    event.preventDefault()
+    const problem = problemFor(step.id)
+    if (problem) {
+      setError(problem)
+      return
+    }
+    setError(null)
+    setStepIndex((current) => Math.min(current + 1, FLOW_STEPS.length - 1))
+  }
+
+  async function finish(event: FormEvent) {
     event.preventDefault()
     const input = toInput(draft)
     const problem = validateOnboarding(input)
     if (problem) {
       setError(problem)
-      setSaved(false)
       return
     }
 
-    setSaving(true)
     setError(null)
+    setSaveError(null)
+    setPhase("people")
     try {
-      const profile = await saveOnboarding(userId, input)
-      setDraft(draftFromProfile(profile))
-      setSaved(true)
+      await saveOnboarding(token, input)
     } catch (err) {
-      setSaved(false)
-      setError(err instanceof Error ? err.message : "Save failed")
-    } finally {
-      setSaving(false)
+      setSaveError(err instanceof Error ? err.message : "Save failed")
     }
   }
 
+  if (phase === "people") {
+    return (
+      <div className="flow">
+        <Matches viewer={toInput(draft)} />
+        {saveError ? <p className="error">Profile was not saved. {saveError}</p> : null}
+        <div className="actions">
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => {
+              setStepIndex(0)
+              setPhase("pages")
+            }}
+          >
+            Edit answers
+          </button>
+        </div>
+        {extras ? (
+          <details className="tickets">
+            <summary>Saved pages</summary>
+            {extras}
+          </details>
+        ) : null}
+      </div>
+    )
+  }
+
+  const last = stepIndex === FLOW_STEPS.length - 1
+
   return (
-    <form className="onboarding" onSubmit={save}>
-      <h2>Profile</h2>
-      <p className="note">
-        {ready
-          ? "Add what you know and what you want to learn. Separate items with commas. Someone who knows Diwali can be matched with someone who wants to learn it."
-          : "Loading profile..."}
+    <form className="flow onboarding" onSubmit={last ? finish : goNext}>
+      <p className="step-count">
+        {stepIndex + 1} of {FLOW_STEPS.length}
       </p>
-      <label htmlFor="username">
-        User name
-        <input
-          id="username"
-          name="username"
-          value={draft.username}
-          disabled={!ready || saving}
-          autoComplete="nickname"
-          onChange={(event) => {
-            setSaved(false)
-            setDraft((current) => ({ ...current, username: event.target.value }))
-          }}
-        />
-      </label>
-      <label htmlFor="first-name">
-        First name
-        <input
-          id="first-name"
-          name="given-name"
-          value={draft.firstName}
-          disabled={!ready || saving}
-          autoComplete="given-name"
-          onChange={(event) => {
-            setSaved(false)
-            setDraft((current) => ({ ...current, firstName: event.target.value }))
-          }}
-        />
-      </label>
-      <label htmlFor="location">
-        Location
-        <input
-          id="location"
-          name="location"
-          value={draft.location}
-          disabled={!ready || saving}
-          autoComplete="address-level2"
-          placeholder="Seattle"
-          onChange={(event) => {
-            setSaved(false)
-            setDraft((current) => ({ ...current, location: event.target.value }))
-          }}
-        />
-      </label>
-      <label htmlFor="age">
-        Age
-        <input
-          id="age"
-          name="age"
-          type="number"
-          inputMode="numeric"
-          min={ONBOARDING_LIMITS.ageMin}
-          max={ONBOARDING_LIMITS.ageMax}
-          value={draft.age}
-          disabled={!ready || saving}
-          onChange={(event) => {
-            setSaved(false)
-            setDraft((current) => ({ ...current, age: event.target.value }))
-          }}
-        />
-      </label>
-      <label htmlFor="gathering-size">
-        Gathering size
-        <select
-          id="gathering-size"
-          name="gathering-size"
-          value={draft.gatheringSize}
-          disabled={!ready || saving}
-          onChange={(event) => {
-            setSaved(false)
-            setDraft((current) => ({ ...current, gatheringSize: event.target.value }))
-          }}
-        >
-          <option value="">Choose a size</option>
+      <h2>{step.title}</h2>
+      {stepIndex === 0 ? (
+        <p className="note">Filled in so you can click through. Change any answer.</p>
+      ) : null}
+      {topic ? <p className="note">Separate items with commas.</p> : null}
+
+      {step.id === "you" ? (
+        <>
+          <label htmlFor="username">
+            User name
+            <input
+              id="username"
+              name="username"
+              value={draft.username}
+              autoComplete="nickname"
+              onChange={(event) => setDraft((current) => ({ ...current, username: event.target.value }))}
+            />
+          </label>
+          <label htmlFor="first-name">
+            First name
+            <input
+              id="first-name"
+              name="given-name"
+              value={draft.firstName}
+              autoComplete="given-name"
+              onChange={(event) => setDraft((current) => ({ ...current, firstName: event.target.value }))}
+            />
+          </label>
+          <label htmlFor="age">
+            Age
+            <input
+              id="age"
+              name="age"
+              type="number"
+              inputMode="numeric"
+              min={ONBOARDING_LIMITS.ageMin}
+              max={ONBOARDING_LIMITS.ageMax}
+              value={draft.age}
+              onChange={(event) => setDraft((current) => ({ ...current, age: event.target.value }))}
+            />
+          </label>
+        </>
+      ) : null}
+
+      {step.id === "where" ? (
+        <label htmlFor="location">
+          Location
+          <input
+            id="location"
+            name="location"
+            value={draft.location}
+            autoComplete="address-level2"
+            onChange={(event) => setDraft((current) => ({ ...current, location: event.target.value }))}
+          />
+        </label>
+      ) : null}
+
+      {step.id === "gathering" ? (
+        <fieldset className="choices">
+          <legend>Group size you want</legend>
           {GATHERING_SIZES.map((size) => (
-            <option key={size.value} value={size.value}>
+            <label key={size.value} className="choice">
+              <input
+                type="radio"
+                name="gathering-size"
+                value={size.value}
+                checked={draft.gatheringSize === size.value}
+                onChange={() => setDraft((current) => ({ ...current, gatheringSize: size.value }))}
+              />
               {size.label}
-            </option>
+            </label>
           ))}
-        </select>
-      </label>
-      {PROFILE_FIELDS.map((topic) => (
-        <fieldset key={topic.key} disabled={!ready || saving}>
-          <legend>{topic.title}</legend>
+        </fieldset>
+      ) : null}
+
+      {topic ? (
+        <>
           <label htmlFor={`${topic.key}-knows`}>
             {topic.knows}
             <input
               id={`${topic.key}-knows`}
               value={draft.topics[topic.key].knows}
-              placeholder={topic.knowsHint}
               onChange={(event) => updateTopic(topic.key, "knows", event.target.value)}
             />
           </label>
@@ -233,17 +244,32 @@ export function OnboardingForm({ userId }: { userId: string }) {
             <input
               id={`${topic.key}-wants`}
               value={draft.topics[topic.key].wants}
-              placeholder={topic.wantsHint}
               onChange={(event) => updateTopic(topic.key, "wants", event.target.value)}
             />
           </label>
-        </fieldset>
-      ))}
+        </>
+      ) : null}
+
       {error ? <p className="error">{error}</p> : null}
-      {saved ? <p className="saved">Profile saved.</p> : null}
-      <button type="submit" disabled={!ready || saving}>
-        {saving ? "Saving..." : "Save profile"}
-      </button>
+      <div className="actions">
+        {stepIndex > 0 ? (
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => {
+              setError(null)
+              setStepIndex((current) => current - 1)
+            }}
+          >
+            Back
+          </button>
+        ) : (
+          <span />
+        )}
+        <button type="submit" className="primary">
+          {last ? "See people" : "Next"}
+        </button>
+      </div>
     </form>
   )
 }

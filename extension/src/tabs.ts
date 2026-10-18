@@ -1,4 +1,8 @@
 export function readActiveTab(): Promise<{ title: string; url: string }> {
+  if (typeof chrome === "undefined" || !chrome.tabs?.query) {
+    return Promise.reject(new Error("No active tab"))
+  }
+
   return new Promise((resolve, reject) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const runtimeError = chrome.runtime.lastError

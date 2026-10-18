@@ -21,7 +21,9 @@ node --version
 
 ## Sign-in
 
-Sign-in is parked. The popup creates a local user id on first open and sends it as `X-User-Id`. Leave `AUTH_MODE=local` in the root `.env`. Firestore still stores that user's tickets and onboarding profile.
+The popup signs in with Clerk. `AUTH_MODE=clerk` in the root `.env` makes the API require a Clerk session token. Firestore stores that Clerk user's tickets and onboarding profile.
+
+In the Clerk dashboard, turn on the Native API and add `chrome-extension://gpnknnpdogpdgeejedabdihnacblhmmj` to allowed origins. Email code and password fit the popup. A full-page OAuth redirect does not.
 
 ## Firebase
 
@@ -47,8 +49,8 @@ Root `.env`, read by the API:
 
 | Variable | Required | Value |
 | --- | --- | --- |
-| `AUTH_MODE` | already set | `local` |
-| `CLERK_SECRET_KEY` | only when `AUTH_MODE=clerk` | Clerk secret key |
+| `AUTH_MODE` | already set | `clerk` |
+| `CLERK_SECRET_KEY` | yes, for signed-in routes | Clerk secret key |
 | `CLERK_AUTHORIZED_PARTIES` | already set | `chrome-extension://gpnknnpdogpdgeejedabdihnacblhmmj` |
 | `CORS_ORIGINS` | already set | same origin |
 | `CLERK_JWT_KEY` | no | PEM public key from the Clerk API keys page. When set, the API checks tokens on this machine. When empty, it fetches Clerk's keys with the secret key. |
@@ -79,7 +81,32 @@ curl -s http://localhost:5000/ready
 
 `/health` returns `{"status":"ok"}` with no credentials file. `/ready` returns the same body after Firebase Admin initializes and reads Firestore. If `FIREBASE_CREDENTIALS_PATH` is empty or the file is missing, `/ready` returns a JSON error that names that problem.
 
-`GET /api/tickets` with no `X-User-Id` header returns 401. The popup sends that header.
+`GET /api/tickets` with no `Authorization` header returns 401. The popup sends a Clerk session token.
+
+## Sample profiles
+
+One hundred sample people live in `extension/src/popup/sampleProfiles.ts`. From `backend/`, with the virtualenv active and `FIREBASE_CREDENTIALS_PATH` set:
+
+```bash
+python seed_profiles.py
+```
+
+That writes 100 onboarding documents at `users/{uuid}/profile/onboarding`. The uuid is that person's id, and it is a valid `X-User-Id`.
+
+Each document stores `username`, `first_name`, `location`, `age`, `gathering_size`, and the five topics: `languages`, `locations`, `hobbies`, `interests`, and `festivals`. The write also sets `user_id`, `created_at`, and `updated_at`.
+
+`compatibility_score` and `matched_on` are computed for a viewer. They are not fields on the document. `PUT /api/onboarding` rejects both.
+
+Running the script again replaces those same 100 documents and keeps `created_at`.
+
+With the API running, read one profile. This one is Amira, who knows Dance:
+
+```bash
+curl -s http://localhost:5000/api/onboarding \
+  -H "X-User-Id: 1ec93661-7c2e-413f-8fde-908dcf28e4ba"
+```
+
+That request uses the local caller header. It answers when `AUTH_MODE=local`. With `AUTH_MODE=clerk`, the same path expects `Authorization: Bearer`.
 
 ## Extension
 
@@ -95,12 +122,12 @@ Open `chrome://extensions`, turn on Developer mode, and load the `extension/dist
 
 Restart `npm run dev` after changing `extension/.env`. Reload the extension in `chrome://extensions` after a rebuild.
 
-Open the toolbar popup. It shows the active tab title and URL, a Save ticket button, the onboarding profile, and tickets already stored for the local user id.
+Open the toolbar popup. Signed out, it shows sign-in and sign-up. Signed in, it shows the onboarding flow, and after that the active tab, a Save ticket button, and tickets stored for that Clerk user.
 
 ## What a finished setup can do
 
 With the root `.env`, `extension/.env`, and the extension loaded:
 
 1. `curl -s http://localhost:5000/ready` returns `{"status":"ok"}`.
-2. The popup opens without a sign-in screen.
-3. Save ticket writes the active tab to Firestore at `users/{userId}/tickets/{ticketId}`. The popup lists it on the next open.
+2. The popup signs in with the Clerk user.
+3. Save ticket writes the active tab to Firestore at `users/{clerkUserId}/tickets/{ticketId}`. The popup lists it on the next open.

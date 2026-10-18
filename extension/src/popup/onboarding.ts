@@ -95,6 +95,15 @@ export const PROFILE_FIELDS: {
   },
 ]
 
+export const FLOW_STEPS: { id: FlowStepId; title: string }[] = [
+  { id: "you", title: "About you" },
+  { id: "where", title: "Where you are" },
+  { id: "gathering", title: "Gathering size" },
+  ...PROFILE_FIELDS.map((field) => ({ id: field.key, title: field.title })),
+]
+
+export type FlowStepId = "you" | "where" | "gathering" | TopicKey
+
 export function cleanText(value: string): string {
   return value.trim().replace(/\s+/g, " ")
 }
@@ -154,6 +163,60 @@ export function validateOnboarding(input: OnboardingInput): string | null {
         if (item.length > ONBOARDING_LIMITS.item) {
           return `${label} has an item longer than ${ONBOARDING_LIMITS.item} characters.`
         }
+      }
+    }
+  }
+  return null
+}
+
+export function validateFlowStep(step: FlowStepId, input: OnboardingInput): string | null {
+  if (step === "you") {
+    const username = cleanText(input.username)
+    const firstName = cleanText(input.first_name)
+    if (!username) return "Enter a user name."
+    if (username.length > ONBOARDING_LIMITS.username) return "User name can be at most 40 characters."
+    if (!firstName) return "Enter a first name."
+    if (firstName.length > ONBOARDING_LIMITS.first_name) {
+      return "First name can be at most 80 characters."
+    }
+    if (!Number.isInteger(input.age)) return "Enter your age."
+    if (input.age < ONBOARDING_LIMITS.ageMin || input.age > ONBOARDING_LIMITS.ageMax) {
+      return "Age must be from 13 to 120."
+    }
+    return null
+  }
+
+  if (step === "where") {
+    const location = cleanText(input.location)
+    if (!location) return "Enter a location."
+    if (location.length > ONBOARDING_LIMITS.location) {
+      return "Location can be at most 80 characters."
+    }
+    return null
+  }
+
+  if (step === "gathering") {
+    if (!GATHERING_SIZES.some((size) => size.value === input.gathering_size)) {
+      return "Choose a gathering size."
+    }
+    return null
+  }
+
+  const field = PROFILE_FIELDS.find((item) => item.key === step)
+  if (!field) return null
+  const topic = input[field.key]
+  const sides = [
+    ["knows", field.knows],
+    ["wants_to_learn", field.wants],
+  ] as const
+  for (const [side, label] of sides) {
+    const items = topic[side]
+    if (items.length > ONBOARDING_LIMITS.list) {
+      return `${label} can list at most ${ONBOARDING_LIMITS.list} items.`
+    }
+    for (const item of items) {
+      if (item.length > ONBOARDING_LIMITS.item) {
+        return `${label} has an item longer than ${ONBOARDING_LIMITS.item} characters.`
       }
     }
   }
