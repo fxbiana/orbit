@@ -4,7 +4,7 @@ Chrome extension that saves the active tab as a ticket. The popup is React. The 
 
 ## Product decisions (locked)
 
-These decisions are locked for planning and implementation. Change them only with an explicit product decision, not casually in a feature PR. Schema paths, additive collections, and workflows for the next layers: [`docs/SCHEMA_AND_WORKFLOW.md`](docs/SCHEMA_AND_WORKFLOW.md).
+These decisions are locked for planning and implementation. Change them only with an explicit product decision, not casually in a feature PR. Schema paths, additive collections, and workflows for the next layers: [`docs/SCHEMA_AND_WORKFLOW.md`](docs/SCHEMA_AND_WORKFLOW.md). Hackathon feasibility for SE (Jagman): [`docs/JAGMAN_FEASIBILITY.md`](docs/JAGMAN_FEASIBILITY.md). Pitch vs repo: [`docs/ORBIT_GAP_MAP.md`](docs/ORBIT_GAP_MAP.md). Devpost draft: [`docs/DEVPOST.md`](docs/DEVPOST.md).
 
 ### North star and horizons
 
@@ -109,6 +109,11 @@ The API container runs `flask --debug` on port 5000. The website container runs 
 | GET | `/api/onboarding` | Clerk session |
 | PUT | `/api/onboarding` | Clerk session, JSON onboarding profile |
 | GET | `/api/matches` | Clerk session; optional `limit` (default 10, max 50) |
+| GET | `/api/plans` | Clerk session; open plans newest first |
+| POST | `/api/plans` | Clerk session, JSON plan create body |
+| GET | `/api/plans/<plan_id>` | Clerk session; plan detail + members |
+| POST | `/api/plans/<plan_id>/join` | Clerk session; join open plan under capacity |
+| GET | `/api/plans/<plan_id>/matches` | Clerk session; compatibility among members; needs onboarding |
 | GET | `/api/tickets` | Clerk session |
 | POST | `/api/tickets` | Clerk session, JSON `{ "title", "url" }` |
 

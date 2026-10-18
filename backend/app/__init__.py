@@ -16,11 +16,13 @@ def create_app(config_override: dict | None = None) -> Flask:
     from app.routes.health import bp as health_bp
     from app.routes.matches import bp as matches_bp
     from app.routes.onboarding import bp as onboarding_bp
+    from app.routes.plans import bp as plans_bp
     from app.routes.tickets import bp as tickets_bp
 
     app.register_blueprint(health_bp)
     app.register_blueprint(matches_bp)
     app.register_blueprint(onboarding_bp)
+    app.register_blueprint(plans_bp)
     app.register_blueprint(tickets_bp)
 
     @app.errorhandler(HTTPException)
