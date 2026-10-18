@@ -45,8 +45,11 @@ function PersonRow({ person, lead = false }: { person: SampleProfile; lead?: boo
   )
 }
 
+const TOP_MATCHES = 10
+
 export function Matches({ viewer }: { viewer: OnboardingInput }) {
-  const people = sampleProfilesFor(viewer)
+  const ranked = sampleProfilesFor(viewer)
+  const people = ranked.slice(0, TOP_MATCHES)
   const top = people[0]
   const others = people.slice(1)
 
@@ -54,8 +57,8 @@ export function Matches({ viewer }: { viewer: OnboardingInput }) {
     <section className="matches">
       <h2>People who fit you</h2>
       <p className="note">
-        {people.length} people, highest score first. 40 points when they know something you want to
-        learn. City, gathering size, and age add the rest, up to 100.
+        Top {people.length} of {ranked.length}, highest score first. 40 points when they know
+        something you want to learn. City, gathering size, and age add the rest, up to 100.
       </p>
       {top ? <PersonRow person={top} lead /> : null}
       <ol className="people">

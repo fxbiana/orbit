@@ -1,3 +1,5 @@
+import base64
+import json
 import re
 from functools import wraps
 
@@ -5,6 +7,23 @@ from clerk_backend_api import AuthenticateRequestOptions, authenticate_request
 from flask import abort, current_app, g, request
 
 _USER_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
+
+
+def _token_azp() -> str | None:
+    """Read azp from the bearer payload. The signature is not checked here."""
+    header = request.headers.get("Authorization") or ""
+    if not header.startswith("Bearer "):
+        return None
+    parts = header[7:].strip().split(".")
+    if len(parts) != 3:
+        return None
+    try:
+        padded = parts[1] + "=" * (-len(parts[1]) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded))
+    except (ValueError, json.JSONDecodeError):
+        return None
+    azp = payload.get("azp") if isinstance(payload, dict) else None
+    return azp if isinstance(azp, str) else None
 
 
 def read_local_user_id() -> str:
@@ -33,6 +52,11 @@ def _authenticate_clerk() -> None:
     )
     if not state.is_signed_in:
         reason = state.reason.name if state.reason else "unauthorized"
+        current_app.logger.warning(
+            "Clerk rejected the session token: %s azp=%s",
+            reason,
+            _token_azp() or "missing",
+        )
         abort(401, description=reason)
 
     g.auth_state = state

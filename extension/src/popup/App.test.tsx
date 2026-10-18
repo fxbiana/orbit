@@ -34,6 +34,11 @@ vi.mock("./api", () => ({
   createTicket: vi.fn(),
   getOnboarding: vi.fn(),
   saveOnboarding: vi.fn(),
+  sessionToken: async (getToken: () => Promise<string | null>) => {
+    const token = await getToken()
+    if (!token) throw new Error("No session token")
+    return token
+  },
 }))
 
 const tab = { title: "Docs", url: "https://example.com/docs" }
@@ -52,7 +57,7 @@ beforeEach(() => {
 })
 
 it("starts on a prefilled about-you page", async () => {
-  render(<OnboardingForm token="token" />)
+  render(<OnboardingForm getToken={async () => "token"} />)
 
   expect(await screen.findByRole("heading", { name: "About you" })).toBeInTheDocument()
   expect(screen.getByLabelText("User name")).toHaveValue("you")
@@ -62,7 +67,7 @@ it("starts on a prefilled about-you page", async () => {
 })
 
 it("opens one section per page, then ranks people who know dance", async () => {
-  render(<OnboardingForm token="token" />)
+  render(<OnboardingForm getToken={async () => "token"} />)
   expect(await screen.findByRole("heading", { name: "About you" })).toBeInTheDocument()
 
   for (let i = 0; i < 5; i += 1) {
@@ -84,7 +89,7 @@ it("opens one section per page, then ranks people who know dance", async () => {
 })
 
 it("loads the active tab and an empty ticket list", async () => {
-  render(<TicketPanel token="session-token" />)
+  render(<TicketPanel getToken={async () => "session-token"} />)
 
   expect(await screen.findByText("Docs")).toBeInTheDocument()
   expect(screen.getByText("https://example.com/docs")).toBeInTheDocument()
@@ -95,7 +100,7 @@ it("loads the active tab and an empty ticket list", async () => {
 it("shows an error when the active tab cannot be read", async () => {
   vi.mocked(readActiveTab).mockRejectedValue(new Error("No active tab"))
 
-  render(<TicketPanel token="session-token" />)
+  render(<TicketPanel getToken={async () => "session-token"} />)
 
   expect(await screen.findByText("No active tab")).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Save ticket" })).toBeDisabled()
@@ -134,7 +139,7 @@ it("saves the tab and refreshes the list", async () => {
     .mockResolvedValueOnce({ tickets: [saved] })
   vi.mocked(createTicket).mockResolvedValue(saved)
 
-  render(<TicketPanel token="session-token" />)
+  render(<TicketPanel getToken={async () => "session-token"} />)
   expect(await screen.findByText("Docs")).toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "Save ticket" }))
 
@@ -160,7 +165,7 @@ it("disables the button while a save is in flight", async () => {
     }),
   )
 
-  render(<TicketPanel token="session-token" />)
+  render(<TicketPanel getToken={async () => "session-token"} />)
   expect(await screen.findByText("Docs")).toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "Save ticket" }))
 
@@ -181,7 +186,7 @@ it("disables the button while a save is in flight", async () => {
 it("shows the save error and leaves the button ready", async () => {
   vi.mocked(createTicket).mockRejectedValue(new Error("Firestore request failed"))
 
-  render(<TicketPanel token="session-token" />)
+  render(<TicketPanel getToken={async () => "session-token"} />)
   expect(await screen.findByText("Docs")).toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "Save ticket" }))
 
@@ -192,7 +197,7 @@ it("shows the save error and leaves the button ready", async () => {
 it("uses a generic message when a save fails with a non-error", async () => {
   vi.mocked(createTicket).mockRejectedValue("nope")
 
-  render(<TicketPanel token="session-token" />)
+  render(<TicketPanel getToken={async () => "session-token"} />)
   expect(await screen.findByText("Docs")).toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "Save ticket" }))
 

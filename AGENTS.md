@@ -32,24 +32,23 @@ flask --app wsgi run --debug --port 5000
 
 `/health` answers without Firebase. `/ready` initializes Firebase Admin and reads Firestore. Ticket and onboarding routes need `FIREBASE_CREDENTIALS_PATH`. Signed-in routes need `CLERK_SECRET_KEY` while `AUTH_MODE=clerk`.
 
-Extension:
+Website, from `web/` after `web/.env` exists:
 
 ```bash
-cd extension
-cp .env.example .env
+cd web
 npm install
 npm run dev
 ```
 
-Load the CRXJS `dist` directory as an unpacked extension. Put the publishable key in `extension/.env` as `VITE_CLERK_PUBLISHABLE_KEY`. The popup shows sign-in and sign-up until a Clerk session exists.
+The site runs at `http://localhost:5174`. That origin has to be in `CORS_ORIGINS` and `CLERK_AUTHORIZED_PARTIES`.
 
-Docker, from the repo root, after both env files exist and `FIREBASE_CREDENTIALS_PATH` is set:
+Docker, from the repo root, after the env files exist and `FIREBASE_CREDENTIALS_PATH` is set:
 
 ```bash
 docker compose up --build
 ```
 
-The API container runs `flask --debug` on port 5000 and restarts the process when a file under `backend/` changes. The extension container runs Vite on port 5173, polls for saves, and refreshes the popup. Chrome loads `extension/dist` from the host. `docker compose exec api python seed_profiles.py` writes the sample profiles. `docker compose exec api pytest` runs the API tests.
+The API container runs `flask --debug` on port 5000. The website container runs Vite on port 5174. `docker compose exec api python seed_profiles.py` writes the sample profiles. `docker compose exec api pytest` runs the API tests.
 
 ## Routes
 
@@ -79,12 +78,14 @@ The profile stores `username`, `first_name`, `location`, `age`, `gathering_size`
 
 `username` is at most 40 characters. `first_name` and `location` are at most 80. Each list holds at most 20 strings, and each string is at most 80 characters. The response adds `user_id`, `created_at`, and `updated_at`. A later PUT keeps `created_at` and refreshes `updated_at`. Validation lives in `backend/app/onboarding.py`. The caller is `g.user_id`. A user id in the JSON body is rejected.
 
-## Extension
+## Website
 
-Tab capture stays in the popup (`extension/src/tabs.ts`). `activeTab` is granted when the toolbar popup opens. The service worker (`extension/src/background/index.ts`) is the install hook. Session tokens do not go in `chrome.storage`.
+The product is the React site in `web/`. Clerk's React SDK signs the user in. The site sends `Authorization: Bearer` to the API. Saving a page is a title and a URL. The onboarding flow and the match list live here.
 
-`host_permissions` includes `http://localhost:5000/*` for the API and `https://*.clerk.accounts.dev/*` for Clerk. Add a production host there when one exists.
+## Extension, later
+
+`extension/` is the later Chrome extension, not the app you run now. It will read the active tab and save it with the same Clerk session. A static sample of that popup is on the website. Session tokens do not go in `chrome.storage`.
 
 ## Secrets
 
-`.env`, `extension/.env`, and the Firebase service account JSON stay untracked. The Clerk publishable key is the only Clerk value that belongs in the extension. The manifest `key` field is a public key.
+`.env`, `web/.env`, `extension/.env`, and the Firebase service account JSON stay untracked. The Clerk publishable key is the only Clerk value that belongs in the website. The manifest `key` field is a public key.
