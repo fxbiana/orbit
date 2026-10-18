@@ -168,3 +168,125 @@ def test_tickets_are_private_to_each_user(client):
     theirs = client.get("/api/tickets", headers={"X-Test-User": "user_other"})
     assert theirs.status_code == 200
     assert [ticket["title"] for ticket in theirs.get_json()["tickets"]] == ["Theirs"]
+
+
+def test_get_tickets_is_empty_for_a_new_user(client):
+    response = client.get("/api/tickets")
+    assert response.status_code == 200
+    assert response.get_json() == {"tickets": []}
+
+
+def test_post_ticket_strips_whitespace(client):
+    response = _post(client, "  A tab  ", "  https://example.com/tab  ")
+    assert response.status_code == 201
+    body = response.get_json()
+    assert body["title"] == "A tab"
+    assert body["url"] == "https://example.com/tab"
+
+
+def test_post_ticket_rejects_a_blank_title(client):
+    response = _post(client, "   ", "https://example.com/tab")
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "title and url are required"
+
+
+def test_post_ticket_rejects_a_blank_url(client):
+    response = _post(client, "A tab", "   ")
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "title and url are required"
+
+
+def test_post_ticket_rejects_a_body_that_is_not_json(client):
+    response = client.post("/api/tickets", data="not-json", content_type="text/plain")
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "title and url are required"
+
+
+def test_post_ticket_accepts_the_maximum_lengths(client):
+    response = _post(client, "t" * 500, "u" * 2000)
+    assert response.status_code == 201
+    body = response.get_json()
+    assert body["title"] == "t" * 500
+    assert body["url"] == "u" * 2000
+
+
+def test_post_ticket_ignores_a_user_id_in_the_body(client):
+    response = client.post(
+        "/api/tickets",
+        json={
+            "title": "Mine",
+            "url": "https://example.com/mine",
+            "user_id": "user_other",
+            "status": "closed",
+        },
+    )
+    assert response.status_code == 201
+    assert response.get_json()["status"] == "open"
+
+    mine = client.get("/api/tickets")
+    assert [ticket["title"] for ticket in mine.get_json()["tickets"]] == ["Mine"]
+
+    theirs = client.get("/api/tickets", headers={"X-Test-User": "user_other"})
+    assert theirs.get_json()["tickets"] == []
+
+
+def test_get_tickets_defaults_missing_document_fields(client, fake_firestore):
+    (
+        fake_firestore.collection("users")
+        .document("user_test")
+        .collection("tickets")
+        .document("sparse")
+        .set({})
+    )
+
+    response = client.get("/api/tickets")
+    assert response.status_code == 200
+    assert response.get_json()["tickets"] == [
+        {
+            "id": "sparse",
+            "title": "",
+            "url": "",
+            "status": "open",
+            "created_at": None,
+        }
+    ]
+
+
+def test_get_tickets_returns_503_when_the_query_fails(client, fake_firestore, monkeypatch):
+    tickets = fake_firestore.collection("users").document("user_test").collection("tickets")
+
+    def order_by(*_args, **_kwargs):
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(tickets, "order_by", order_by)
+    response = client.get("/api/tickets")
+    assert response.status_code == 503
+    assert response.get_json()["error"] == "Firestore request failed"
+
+
+def test_post_ticket_returns_503_when_the_write_fails(client, fake_firestore, monkeypatch):
+    tickets = fake_firestore.collection("users").document("user_test").collection("tickets")
+
+    class BrokenDocument:
+        def set(self, _data):
+            raise RuntimeError("down")
+
+    monkeypatch.setattr(tickets, "document", lambda _doc_id: BrokenDocument())
+    response = _post(client, "A tab", "https://example.com/tab")
+    assert response.status_code == 503
+    assert response.get_json()["error"] == "Firestore request failed"
+
+
+def test_firestore_http_errors_are_not_rewritten(client, fake_firestore, monkeypatch):
+    from flask import abort
+
+    tickets = fake_firestore.collection("users").document("user_test").collection("tickets")
+
+    class RejectingDocument:
+        def set(self, _data):
+            abort(409, description="conflict")
+
+    monkeypatch.setattr(tickets, "document", lambda _doc_id: RejectingDocument())
+    response = _post(client, "A tab", "https://example.com/tab")
+    assert response.status_code == 409
+    assert response.get_json()["error"] == "conflict"

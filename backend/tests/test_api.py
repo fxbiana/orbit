@@ -81,3 +81,34 @@ def test_ready_when_firestore_read_fails(client, monkeypatch):
     response = client.get("/ready")
     assert response.status_code == 503
     assert response.get_json()["error"] == "Firestore read failed"
+
+
+def test_ready_keeps_an_http_error_from_the_read(client, monkeypatch):
+    from flask import abort
+
+    class AbortingRead:
+        def collection(self, _name):
+            return self
+
+        def document(self, _name):
+            return self
+
+        def get(self):
+            abort(503, description="permission denied")
+
+    monkeypatch.setattr("app.firebase.firestore_client", lambda: AbortingRead())
+    response = client.get("/ready")
+    assert response.status_code == 503
+    assert response.get_json()["error"] == "permission denied"
+
+
+def test_api_cors_allows_only_the_configured_origin(client):
+    origin = "chrome-extension://gpnknnpdogpdgeejedabdihnacblhmmj"
+    allowed = client.get("/api/me", headers={"Origin": origin})
+    assert allowed.headers["Access-Control-Allow-Origin"] == origin
+
+    rejected = client.get("/api/me", headers={"Origin": "https://evil.example"})
+    assert "Access-Control-Allow-Origin" not in rejected.headers
+
+    health = client.get("/health", headers={"Origin": origin})
+    assert "Access-Control-Allow-Origin" not in health.headers

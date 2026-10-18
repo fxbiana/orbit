@@ -8,12 +8,11 @@ import {
 import { useEffect, useState } from "react"
 import { readActiveTab } from "../tabs"
 import { createTicket, listTickets, type Ticket } from "./api"
-
-const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 const POPUP_URL = chrome.runtime.getURL("src/popup/index.html")
 
 export function App() {
-  if (!PUBLISHABLE_KEY) {
+  const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+  if (!publishableKey) {
     return (
       <main className="popup">
         <h1>Ticket Trapper</h1>
@@ -24,7 +23,7 @@ export function App() {
 
   return (
     <ClerkProvider
-      publishableKey={PUBLISHABLE_KEY}
+      publishableKey={publishableKey}
       afterSignOutUrl={POPUP_URL}
       signInFallbackRedirectUrl={POPUP_URL}
       signUpFallbackRedirectUrl={POPUP_URL}
