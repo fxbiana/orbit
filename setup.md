@@ -115,7 +115,7 @@ curl -s http://localhost:5000/ready
 
 ## Sample profiles
 
-One hundred sample people live in `extension/src/popup/sampleProfiles.ts`. From `backend/`, with the virtualenv active and `FIREBASE_CREDENTIALS_PATH` set:
+One hundred sample people live in `web/src/sampleProfiles.ts`. From `backend/`, with the virtualenv active, website deps installed (`cd web && npm install`), and `FIREBASE_CREDENTIALS_PATH` set:
 
 ```bash
 python seed_profiles.py

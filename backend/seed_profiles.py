@@ -10,6 +10,7 @@ From ``backend/``:
 """
 
 import json
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -19,13 +20,29 @@ from app.config import ROOT
 from app.onboarding import TOPIC_KEYS, parse_onboarding
 
 STORED_FIELDS = ("username", "first_name", "location", "age", "gathering_size", *TOPIC_KEYS)
-EXTENSION = ROOT / "extension"
+WEB = ROOT / "web"
+
+
+def _esbuild_bin() -> Path:
+    """Prefer a PATH install (Docker), then the website's local esbuild."""
+    on_path = shutil.which("esbuild")
+    if on_path:
+        return Path(on_path)
+    local = WEB / "node_modules/esbuild/bin/esbuild"
+    if local.is_file():
+        return local
+    raise FileNotFoundError(
+        "esbuild not found. Install website deps (`cd web && npm install`) "
+        "or put esbuild on PATH."
+    )
 
 
 def load_sample_people() -> list[dict]:
-    """Load SAMPLE_PEOPLE from the extension module."""
-    esbuild = EXTENSION / "node_modules/esbuild/bin/esbuild"
-    source = EXTENSION / "src/popup/sampleProfiles.ts"
+    """Load SAMPLE_PEOPLE from the website module."""
+    esbuild = _esbuild_bin()
+    source = WEB / "src/sampleProfiles.ts"
+    if not source.is_file():
+        raise FileNotFoundError(f"sample profiles not found: {source}")
     with tempfile.TemporaryDirectory() as tmp:
         outfile = Path(tmp) / "sampleProfiles.mjs"
         subprocess.run(
@@ -37,7 +54,7 @@ def load_sample_people() -> list[dict]:
                 f"--outfile={outfile}",
             ],
             check=True,
-            cwd=EXTENSION,
+            cwd=WEB,
             capture_output=True,
             text=True,
         )
