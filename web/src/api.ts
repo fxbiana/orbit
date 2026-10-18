@@ -138,3 +138,105 @@ export function joinPlan(token: string, planId: string) {
     body: "{}",
   })
 }
+
+export const CONTACT_CHANNELS = ["instagram", "discord", "snapchat"] as const
+
+export type ContactChannel = (typeof CONTACT_CHANNELS)[number]
+
+export type PreferredChannel = "" | ContactChannel | "orbit"
+
+export type Contact = {
+  instagram: string
+  discord: string
+  snapchat: string
+  preferred: PreferredChannel
+  reach_note: string
+  updated_at: string | null
+}
+
+export type PublicContact = Omit<Contact, "updated_at">
+
+export type ConnectionPerson = {
+  user_id: string
+  first_name: string
+  username: string
+}
+
+export type Connection = {
+  id: string
+  from_user_id: string
+  to_user_id: string
+  status: "pending" | "accepted" | "rejected" | string
+  intro: string
+  other: ConnectionPerson
+  contact: PublicContact | null
+  created_at: string | null
+  updated_at: string | null
+  responded_at: string | null
+}
+
+export type ConnectionBox = "inbox" | "outbox" | "friends"
+
+export type ChatMessage = {
+  id: string
+  author_id: string
+  text: string
+  created_at: string | null
+  mine: boolean
+}
+
+export function getContact(token: string) {
+  return request<Contact>("/api/contact", token)
+}
+
+export function saveContact(
+  token: string,
+  contact: Pick<Contact, "instagram" | "discord" | "snapchat" | "preferred" | "reach_note">,
+) {
+  return request<Contact>("/api/contact", token, {
+    method: "PUT",
+    body: JSON.stringify(contact),
+  })
+}
+
+export function listConnections(token: string, box: ConnectionBox) {
+  const query = new URLSearchParams({ box })
+  return request<{ connections: Connection[] }>(`/api/connections?${query}`, token)
+}
+
+export function createConnection(token: string, input: { to_user_id: string; intro?: string }) {
+  const body: Record<string, string> = { to_user_id: input.to_user_id }
+  if (input.intro) body.intro = input.intro
+  return request<Connection>("/api/connections", token, {
+    method: "POST",
+    body: JSON.stringify(body),
+  })
+}
+
+export function acceptConnection(token: string, connectionId: string) {
+  return request<Connection>(`/api/connections/${encodeURIComponent(connectionId)}/accept`, token, {
+    method: "POST",
+    body: "{}",
+  })
+}
+
+export function rejectConnection(token: string, connectionId: string) {
+  return request<Connection>(`/api/connections/${encodeURIComponent(connectionId)}/reject`, token, {
+    method: "POST",
+    body: "{}",
+  })
+}
+
+export function listMessages(token: string, connectionId: string) {
+  return request<{ messages: ChatMessage[] }>(
+    `/api/connections/${encodeURIComponent(connectionId)}/messages`,
+    token,
+  )
+}
+
+export function sendMessage(token: string, connectionId: string, text: string) {
+  return request<ChatMessage>(`/api/connections/${encodeURIComponent(connectionId)}/messages`, token, {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  })
+}

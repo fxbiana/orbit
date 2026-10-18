@@ -27,7 +27,7 @@ These decisions are locked for planning and implementation. Change them only wit
 | `users/{userId}/profile/onboarding` | Optional `users/{userId}/profile/spotify` snapshot (no OAuth tokens) |
 | `users/{userId}/tickets/{ticketId}` (`title`, `url`, `status`, `created_at`) | Global `events/{eventId}`; optional `event_id` on a ticket when a capture links to an event |
 | Compatibility on the five topics | `users/{userId}/attendance/{eventId}` with `interested` / `going` |
-| No friend graph in onboarding | Separate connection/request documents (consent edge ≠ match score) |
+| No friend graph in onboarding | `connections/{connectionId}` is request → accept. Messages live under that connection and open only after accept. Optional `users/{userId}/profile/contact` holds Instagram, Discord, and Snapchat usernames plus the channel that person actually answers |
 
 - **Tickets ≠ attendance.** A ticket is a saved page (title + URL). “I’m going” is attendance on an event.
 - **Match ≠ friend.** Scoring stays preference-based. Connecting is an explicit request/accept edge.
@@ -36,7 +36,7 @@ These decisions are locked for planning and implementation. Change them only wit
 ### Matching and privacy
 
 - Match lists show compatibility score and limited profile fields needed to judge a fit (name, location, age band/gathering, match reasons).
-- **Connect** is request → accept. Treat deeper contact or messaging as gated on accept once that surface exists.
+- **Connect** is request → accept. Social links and in-app messages stay hidden until both people accept. A match score does not reveal a handle.
 - Current sample-people demo may keep showing scores as today; real-user matching follows the same visibility rules.
 
 ### Events and Ticketmaster
@@ -111,6 +111,14 @@ The API container runs `flask --debug` on port 5000. The website container runs 
 | GET | `/api/onboarding` | Clerk session |
 | PUT | `/api/onboarding` | Clerk session, JSON onboarding profile |
 | GET | `/api/matches` | Clerk session; optional `limit` (default 10, max 50) |
+| GET | `/api/contact` | Clerk session; caller's social links, blank if unset; read does not write |
+| PUT | `/api/contact` | Clerk session, JSON contact (usernames, preferred channel, reach note) |
+| POST | `/api/connections` | Clerk session, JSON `{ "to_user_id", "intro"? }` |
+| GET | `/api/connections` | Clerk session; `box` is `inbox`, `outbox`, or `friends` |
+| POST | `/api/connections/<connection_id>/accept` | Clerk session; recipient only |
+| POST | `/api/connections/<connection_id>/reject` | Clerk session; recipient only |
+| GET | `/api/connections/<connection_id>/messages` | Clerk session; both people, only after accept |
+| POST | `/api/connections/<connection_id>/messages` | Clerk session, JSON `{ "text" }`; both people, only after accept |
 | GET | `/api/plans` | Clerk session; open plans newest first |
 | POST | `/api/plans` | Clerk session, JSON plan create body |
 | GET | `/api/plans/<plan_id>` | Clerk session; plan detail + members |
@@ -141,7 +149,7 @@ The product is the React site in `web/`. Clerk's React SDK signs the user in. Th
 
 ## Sample profiles
 
-The match list on the website ranks `web/src/sampleProfiles.ts` in the browser. `backend/sample_people.json` is the same 100 people for `python seed_profiles.py`. Seeding Firestore is optional for the MVP demo; the on-site ranking does not read those documents. If the TypeScript generator changes, refresh the JSON before seeding again.
+The match list on the website reads `GET /api/matches`, which scores onboarding profiles already stored in Firestore. `web/src/sampleProfiles.ts` is only the generator for `backend/sample_people.json`. Run `python seed_profiles.py` when you want those sample people in the database. If the TypeScript generator changes, refresh the JSON before seeding again.
 
 ## Extension, later
 

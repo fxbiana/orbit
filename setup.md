@@ -116,7 +116,7 @@ curl -s http://localhost:5000/ready
 
 ## Sample profiles
 
-One hundred sample people live in `web/src/sampleProfiles.ts`. The website ranks them in the browser after onboarding. The same people are committed as `backend/sample_people.json` for Firestore seeding.
+One hundred sample people are generated in `web/src/sampleProfiles.ts` and committed as `backend/sample_people.json`. The website does not rank that file in the browser. Seed Firestore, then `GET /api/matches` scores those profiles.
 
 From `backend/`, with the virtualenv active and `FIREBASE_CREDENTIALS_PATH` set:
 

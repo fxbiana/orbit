@@ -2,7 +2,24 @@
   "hash": "47132989",
   "configHash": "16cb320e",
   "lockfileHash": "7b2b5568",
-  "browserHash": "54b3b0a2",
-  "optimized": {},
-  "chunks": {}
+  "browserHash": "fca00775",
+  "optimized": {
+    "react/jsx-dev-runtime": {
+      "src": "../../node_modules/react/jsx-dev-runtime.js",
+      "file": "react_jsx-dev-runtime.js",
+      "fileHash": "34c3df59",
+      "needsInterop": true
+    },
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "31c17827",
+      "needsInterop": true
+    }
+  },
+  "chunks": {
+    "chunk-GAETTYRR": {
+      "file": "chunk-GAETTYRR.js"
+    }
+  }
 }

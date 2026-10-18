@@ -10,6 +10,8 @@ from flask import abort, current_app
 from werkzeug.exceptions import HTTPException
 
 from app.config import ROOT
+from app.connections import CONNECTION_ID, pair_id
+from app.contact import blank_contact, contact_response, public_contact
 from app.onboarding import onboarding_response
 from app.plans import member_response, plan_response
 
@@ -415,3 +417,260 @@ def list_plan_member_profiles(plan_id: str, exclude_user_id: str) -> list[dict]:
         if profile is not None:
             peers.append(profile)
     return peers
+
+
+def _contact_ref(clerk_user_id: str):
+    return (
+        firestore_client()
+        .collection("users")
+        .document(clerk_user_id)
+        .collection("profile")
+        .document("contact")
+    )
+
+
+def get_contact(clerk_user_id: str) -> dict:
+    """Read the caller's contact document. A miss does not create one."""
+    try:
+        snap = _contact_ref(clerk_user_id).get()
+        if not snap.exists:
+            return blank_contact()
+        return contact_response(snap.to_dict() or {}, _iso)
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Firestore contact read failed")
+        abort(503, description="Firestore request failed")
+
+
+def save_contact(clerk_user_id: str, fields: dict) -> dict:
+    now = datetime.now(timezone.utc)
+    payload = {**fields, "updated_at": now}
+    try:
+        _contact_ref(clerk_user_id).set(payload)
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Firestore contact write failed")
+        abort(503, description="Firestore request failed")
+    return contact_response(payload, _iso)
+
+
+def _contact_for_friend(user_id: str) -> dict:
+    try:
+        snap = _contact_ref(user_id).get()
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Firestore contact read failed")
+        abort(503, description="Firestore request failed")
+    if not snap.exists:
+        return public_contact({})
+    return public_contact(snap.to_dict() or {})
+
+
+def _connections():
+    return firestore_client().collection("connections")
+
+
+def _connection_ref(connection_id: str):
+    return _connections().document(connection_id)
+
+
+def _other_summary(user_id: str) -> dict:
+    profile = get_onboarding(user_id) if user_id else None
+    return {
+        "user_id": user_id,
+        "first_name": (profile or {}).get("first_name") or "",
+        "username": (profile or {}).get("username") or "",
+    }
+
+
+def _connection_body(doc_id: str, data: dict, caller: str) -> dict:
+    if data.get("from_user_id") == caller:
+        other_id = data.get("to_user_id") or ""
+    else:
+        other_id = data.get("from_user_id") or ""
+    contact = None
+    if data.get("status") == "accepted" and other_id:
+        contact = _contact_for_friend(other_id)
+    return {
+        "id": doc_id,
+        "from_user_id": data.get("from_user_id") or "",
+        "to_user_id": data.get("to_user_id") or "",
+        "status": data.get("status") or "",
+        "intro": data.get("intro") or "",
+        "other": _other_summary(other_id),
+        "contact": contact,
+        "created_at": _iso(data.get("created_at")),
+        "updated_at": _iso(data.get("updated_at")),
+        "responded_at": _iso(data.get("responded_at")),
+    }
+
+
+def _load_connection(connection_id: str) -> tuple[str, dict]:
+    if CONNECTION_ID.fullmatch(connection_id or "") is None:
+        abort(404, description="connection not found")
+    try:
+        snap = _connection_ref(connection_id).get()
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Firestore connection read failed")
+        abort(503, description="Firestore request failed")
+    if not snap.exists:
+        abort(404, description="connection not found")
+    return snap.id, snap.to_dict() or {}
+
+
+def _require_party(data: dict, caller: str) -> None:
+    if caller not in (data.get("from_user_id"), data.get("to_user_id")):
+        abort(403, description="you are not part of this connection")
+
+
+def create_connection(caller: str, fields: dict) -> dict:
+    to_user_id = fields["to_user_id"]
+    if get_onboarding(caller) is None:
+        abort(404, description="onboarding profile not found")
+    if get_onboarding(to_user_id) is None:
+        abort(404, description="that person is not on Orbit")
+
+    ref = _connection_ref(pair_id(caller, to_user_id))
+    now = datetime.now(timezone.utc)
+    try:
+        snap = ref.get()
+        if snap.exists:
+            data = snap.to_dict() or {}
+            parties = {data.get("from_user_id"), data.get("to_user_id")}
+            if parties != {caller, to_user_id}:
+                abort(409, description="connection id is already in use")
+            status = data.get("status")
+            if status == "pending":
+                abort(409, description="a request is already waiting")
+            if status == "accepted":
+                abort(409, description="you are already connected")
+            if status != "rejected":
+                abort(409, description="a request is already waiting")
+        payload = {
+            "from_user_id": caller,
+            "to_user_id": to_user_id,
+            "status": "pending",
+            "intro": fields.get("intro") or "",
+            "created_at": now,
+            "updated_at": now,
+            "responded_at": None,
+        }
+        ref.set(payload)
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Firestore connection create failed")
+        abort(503, description="Firestore request failed")
+    return _connection_body(ref.id, payload, caller)
+
+
+def list_connections(caller: str, box: str) -> list[dict]:
+    try:
+        outgoing = list(_connections().where("from_user_id", "==", caller).stream())
+        incoming = list(_connections().where("to_user_id", "==", caller).stream())
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Firestore connection list failed")
+        abort(503, description="Firestore request failed")
+
+    seen: set[str] = set()
+    chosen: list[tuple[str, dict]] = []
+    for doc in outgoing + incoming:
+        if doc.id in seen:
+            continue
+        seen.add(doc.id)
+        data = doc.to_dict() or {}
+        if caller not in (data.get("from_user_id"), data.get("to_user_id")):
+            continue
+        status = data.get("status")
+        if box == "inbox" and data.get("to_user_id") == caller and status == "pending":
+            chosen.append((doc.id, data))
+        elif box == "outbox" and data.get("from_user_id") == caller and status == "pending":
+            chosen.append((doc.id, data))
+        elif box == "friends" and status == "accepted":
+            chosen.append((doc.id, data))
+
+    floor = datetime.min.replace(tzinfo=timezone.utc)
+    chosen.sort(key=lambda item: item[1].get("created_at") or floor, reverse=True)
+    return [_connection_body(doc_id, data, caller) for doc_id, data in chosen]
+
+
+def set_connection_status(connection_id: str, caller: str, status: str) -> dict:
+    doc_id, data = _load_connection(connection_id)
+    _require_party(data, caller)
+    if data.get("to_user_id") != caller:
+        verb = "accept" if status == "accepted" else "decline"
+        abort(403, description=f"only the recipient can {verb}")
+    if data.get("status") != "pending":
+        abort(409, description="this request is no longer pending")
+
+    now = datetime.now(timezone.utc)
+    data["status"] = status
+    data["updated_at"] = now
+    data["responded_at"] = now
+    try:
+        _connection_ref(doc_id).set(data)
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Firestore connection update failed")
+        abort(503, description="Firestore request failed")
+    return _connection_body(doc_id, data, caller)
+
+
+def _message_body(message_id: str, data: dict, caller: str) -> dict:
+    return {
+        "id": message_id,
+        "author_id": data.get("author_id") or "",
+        "text": data.get("text") or "",
+        "created_at": _iso(data.get("created_at")),
+        "mine": data.get("author_id") == caller,
+    }
+
+
+def _require_accepted_party(connection_id: str, caller: str) -> tuple[str, dict]:
+    doc_id, data = _load_connection(connection_id)
+    _require_party(data, caller)
+    if data.get("status") != "accepted":
+        abort(403, description="messages open after you both accept")
+    return doc_id, data
+
+
+def list_messages(connection_id: str, caller: str) -> list[dict]:
+    doc_id, _data = _require_accepted_party(connection_id, caller)
+    try:
+        docs = list(_connection_ref(doc_id).collection("messages").stream())
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Firestore message list failed")
+        abort(503, description="Firestore request failed")
+
+    floor = datetime.min.replace(tzinfo=timezone.utc)
+    packed = []
+    for doc in docs:
+        item = doc.to_dict() or {}
+        packed.append((item.get("created_at") or floor, doc.id, item))
+    packed.sort(key=lambda row: row[0])
+    return [_message_body(message_id, item, caller) for _stamp, message_id, item in packed[-50:]]
+
+
+def post_message(connection_id: str, caller: str, text: str) -> dict:
+    doc_id, _data = _require_accepted_party(connection_id, caller)
+    message_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    payload = {"author_id": caller, "text": text, "created_at": now}
+    try:
+        _connection_ref(doc_id).collection("messages").document(message_id).set(payload)
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Firestore message create failed")
+        abort(503, description="Firestore request failed")
+    return _message_body(message_id, payload, caller)

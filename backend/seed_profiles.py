@@ -5,8 +5,8 @@ person's id. ``compatibility_score`` and ``matched_on`` stay off the document:
 they depend on the viewer, and ``parse_onboarding`` rejects them.
 
 The people come from ``backend/sample_people.json``, exported from
-``web/src/sampleProfiles.ts``. The website match list still scores in the
-browser from that TypeScript module; this file is only for Firestore.
+``web/src/sampleProfiles.ts``. The website match list reads these documents
+through ``GET /api/matches``.
 
 From ``backend/``:
 

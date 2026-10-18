@@ -64,6 +64,33 @@ def test_plans_require_a_user_id(client):
     assert matches.status_code == 401
 
 
+def test_contact_and_connections_require_a_user_id(client):
+    contact = client.get("/api/contact")
+    assert contact.status_code == 401
+    assert contact.get_json()["error"] == "X-User-Id is required"
+
+    write = client.put("/api/contact", json={"preferred": "orbit"})
+    assert write.status_code == 401
+
+    listing = client.get("/api/connections?box=inbox")
+    assert listing.status_code == 401
+
+    create = client.post("/api/connections", json={"to_user_id": "user_other"})
+    assert create.status_code == 401
+
+    accept = client.post("/api/connections/abc/accept")
+    assert accept.status_code == 401
+
+    reject = client.post("/api/connections/abc/reject")
+    assert reject.status_code == 401
+
+    messages = client.get("/api/connections/abc/messages")
+    assert messages.status_code == 401
+
+    send = client.post("/api/connections/abc/messages", json={"text": "Hi"})
+    assert send.status_code == 401
+
+
 def test_post_ticket_requires_a_user_id(client):
     response = client.post(
         "/api/tickets",

@@ -1,7 +1,8 @@
-import { FormEvent, ReactNode, useEffect, useState } from "react"
+import { FormEvent, ReactNode, useCallback, useEffect, useState } from "react"
 import { getOnboarding, saveOnboarding, sessionToken } from "./api"
 import { Matches } from "./Matches"
 import { Plans } from "./Plans"
+import { Reach, type LinkStatus } from "./Reach"
 import {
   FLOW_STEPS,
   GATHERING_SIZES,
@@ -17,8 +18,6 @@ import {
   type OnboardingInput,
   type TopicKey,
 } from "./onboarding"
-import { VIEWER_PROFILE } from "./sampleProfiles"
-
 type TopicDraft = { knows: string; wants: string }
 
 type Draft = {
@@ -28,6 +27,21 @@ type Draft = {
   age: string
   gatheringSize: string
   topics: Record<TopicKey, TopicDraft>
+}
+
+function emptyDraft(): Draft {
+  const topics = {} as Record<TopicKey, TopicDraft>
+  for (const key of TOPIC_KEYS) {
+    topics[key] = { knows: "", wants: "" }
+  }
+  return {
+    username: "",
+    firstName: "",
+    location: "",
+    age: "",
+    gatheringSize: "",
+    topics,
+  }
 }
 
 function draftFromProfile(profile: OnboardingInput): Draft {
@@ -74,13 +88,18 @@ export function OnboardingForm({
   getToken: () => Promise<string | null>
   extras?: ReactNode
 }) {
-  const [draft, setDraft] = useState<Draft>(() => draftFromProfile(VIEWER_PROFILE))
+  const [draft, setDraft] = useState<Draft>(emptyDraft)
   const [stepIndex, setStepIndex] = useState(0)
   const [phase, setPhase] = useState<"pages" | "people">("pages")
   const [viewer, setViewer] = useState<OnboardingInput | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
+  const [reachKey, setReachKey] = useState(0)
+  const [links, setLinks] = useState<Record<string, LinkStatus>>({})
+  const onLinks = useCallback((next: Record<string, LinkStatus>) => {
+    setLinks(next)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -159,7 +178,13 @@ export function OnboardingForm({
   if (phase === "people" && viewer) {
     return (
       <div className="flow">
-        <Matches viewer={viewer} getToken={getToken} />
+        <Matches
+          viewer={viewer}
+          getToken={getToken}
+          links={links}
+          onConnected={() => setReachKey((key) => key + 1)}
+        />
+        <Reach getToken={getToken} refreshKey={reachKey} onLinks={onLinks} />
         <Plans getToken={getToken} />
         {saveError ? <p className="error">Profile was not saved. {saveError}</p> : null}
         <div className="actions">
@@ -202,8 +227,7 @@ export function OnboardingForm({
       <h2>{step.title}</h2>
       {stepIndex === 0 ? (
         <p className="note">
-          Welcome. A few answers is enough to find your people. Examples are filled in so you can
-          look around — change anything that isn’t you.
+          Welcome. A few answers is enough to find your people.
         </p>
       ) : null}
       {topic ? <p className="note">Separate items with commas.</p> : null}
