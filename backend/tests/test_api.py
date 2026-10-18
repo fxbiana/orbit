@@ -103,6 +103,21 @@ def test_preflight_allows_the_user_header(client):
     assert "x-user-id" in response.headers["Access-Control-Allow-Headers"].lower()
 
 
+def test_preflight_allows_authorization_for_the_website(client):
+    origin = "http://localhost:5174"
+    response = client.options(
+        "/api/onboarding",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "PUT",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["Access-Control-Allow-Origin"] == origin
+    assert "authorization" in response.headers["Access-Control-Allow-Headers"].lower()
+
+
 def test_ready_without_firebase_credentials(client):
     response = client.get("/ready")
     assert response.status_code == 503
