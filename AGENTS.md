@@ -1,6 +1,6 @@
 # Ticket Trapper
 
-Chrome extension that saves the active tab as a ticket. The popup is React. The API is Flask. A local user id stands in for sign-in until Clerk comes back. Firestore stores tickets and onboarding profiles.
+Chrome extension that saves the active tab as a ticket. The popup is React. The API is Flask. Clerk signs the user in. Firestore stores tickets and onboarding profiles.
 
 ## Layout
 
@@ -13,7 +13,7 @@ The unpacked extension id is `gpnknnpdogpdgeejedabdihnacblhmmj`. The public key 
 
 ## Who owns what
 
-The popup creates one local user id, stores it in `chrome.storage.local`, and sends it as `X-User-Id`. `caller_required` in `backend/app/auth.py` reads that header and sets `g.user_id`. Read the caller from `g.user_id`. A user id in the JSON body is not the caller. `AUTH_MODE=clerk` switches that decorator back to a Clerk session token. Leave it at `local` until Clerk is wired up again.
+Clerk owns identity and sessions. The popup calls `getToken()` and sends `Authorization: Bearer`. `caller_required` in `backend/app/auth.py` verifies that token when `AUTH_MODE=clerk` and sets `g.user_id` to the Clerk user id. Read the caller from `g.user_id`. A user id in the JSON body is not the caller. `AUTH_MODE=local` still accepts `X-User-Id` for tests.
 
 Firestore is the only store, in development and in production. This hackathon uses one Firebase project for both. There is no emulator and no second database. Tickets live at `users/{userId}/tickets/{ticketId}`. Onboarding profiles live at `users/{userId}/profile/onboarding`. The API reads and writes those paths with the Firebase Admin SDK. The extension does not talk to Firestore.
 
@@ -30,7 +30,7 @@ pip install -r requirements.txt
 flask --app wsgi run --debug --port 5000
 ```
 
-`/health` answers without Firebase. `/ready` initializes Firebase Admin and reads Firestore. Ticket and onboarding routes need `FIREBASE_CREDENTIALS_PATH`. `CLERK_SECRET_KEY` is used only when `AUTH_MODE=clerk`.
+`/health` answers without Firebase. `/ready` initializes Firebase Admin and reads Firestore. Ticket and onboarding routes need `FIREBASE_CREDENTIALS_PATH`. Signed-in routes need `CLERK_SECRET_KEY` while `AUTH_MODE=clerk`.
 
 Extension:
 
@@ -41,7 +41,7 @@ npm install
 npm run dev
 ```
 
-Load the CRXJS `dist` directory as an unpacked extension. The popup does not sign in. It reuses the local user id in `chrome.storage.local`.
+Load the CRXJS `dist` directory as an unpacked extension. Put the publishable key in `extension/.env` as `VITE_CLERK_PUBLISHABLE_KEY`. The popup shows sign-in and sign-up until a Clerk session exists.
 
 ## Routes
 
@@ -49,11 +49,11 @@ Load the CRXJS `dist` directory as an unpacked extension. The popup does not sig
 | --- | --- | --- |
 | GET | `/health` | public |
 | GET | `/ready` | public, needs Firebase credentials and Firestore |
-| GET | `/api/me` | `X-User-Id` |
-| GET | `/api/onboarding` | `X-User-Id` |
-| PUT | `/api/onboarding` | `X-User-Id`, JSON onboarding profile |
-| GET | `/api/tickets` | `X-User-Id` |
-| POST | `/api/tickets` | `X-User-Id`, JSON `{ "title", "url" }` |
+| GET | `/api/me` | Clerk session |
+| GET | `/api/onboarding` | Clerk session |
+| PUT | `/api/onboarding` | Clerk session, JSON onboarding profile |
+| GET | `/api/tickets` | Clerk session |
+| POST | `/api/tickets` | Clerk session, JSON `{ "title", "url" }` |
 
 Decorator order on a view is `@bp.get`, `@bp.post`, or `@bp.put`, then `@caller_required`. New routes go on a blueprint under `backend/app/routes/` and return JSON.
 
@@ -73,10 +73,10 @@ The profile stores `username`, `first_name`, `location`, `age`, `gathering_size`
 
 ## Extension
 
-Tab capture stays in the popup (`extension/src/tabs.ts`). `activeTab` is granted when the toolbar popup opens. The service worker (`extension/src/background/index.ts`) is the install hook. The local user id lives in `chrome.storage.local`. Session tokens do not.
+Tab capture stays in the popup (`extension/src/tabs.ts`). `activeTab` is granted when the toolbar popup opens. The service worker (`extension/src/background/index.ts`) is the install hook. Session tokens do not go in `chrome.storage`.
 
-`host_permissions` includes `http://localhost:5000/*` for the API. Add a production host there when one exists.
+`host_permissions` includes `http://localhost:5000/*` for the API and `https://*.clerk.accounts.dev/*` for Clerk. Add a production host there when one exists.
 
 ## Secrets
 
-`.env`, `extension/.env`, and the Firebase service account JSON stay untracked. The manifest `key` field is a public key. Clerk keys stay unused while `AUTH_MODE` is `local`.
+`.env`, `extension/.env`, and the Firebase service account JSON stay untracked. The Clerk publishable key is the only Clerk value that belongs in the extension. The manifest `key` field is a public key.

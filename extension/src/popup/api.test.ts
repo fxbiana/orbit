@@ -25,7 +25,7 @@ describe("api", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("http://localhost:5000/api/tickets", {
       headers: {
-        "X-User-Id": "local_user",
+        Authorization: "Bearer local_user",
         "Content-Type": "application/json",
       },
     })
@@ -66,7 +66,7 @@ describe("api", () => {
       method: "POST",
       body: JSON.stringify({ title: "Docs", url: "https://example.com/docs" }),
       headers: {
-        "X-User-Id": "local_user",
+        Authorization: "Bearer local_user",
         "Content-Type": "application/json",
       },
     })

@@ -17,7 +17,7 @@ def env_csv(key: str, default: list[str] | None = None) -> list[str]:
 
 
 class Config:
-    # local reads X-User-Id. clerk verifies a session token. Clerk is parked.
+    # local reads X-User-Id. clerk verifies a session token.
     AUTH_MODE = (os.environ.get("AUTH_MODE") or "local").strip().lower() or "local"
     CLERK_SECRET_KEY = os.environ.get("CLERK_SECRET_KEY", "")
     CLERK_JWT_KEY = os.environ.get("CLERK_JWT_KEY") or None
