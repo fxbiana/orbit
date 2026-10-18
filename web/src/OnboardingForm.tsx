@@ -1,5 +1,5 @@
-import { FormEvent, ReactNode, useState } from "react"
-import { saveOnboarding, sessionToken } from "./api"
+import { FormEvent, ReactNode, useEffect, useState } from "react"
+import { getOnboarding, saveOnboarding, sessionToken } from "./api"
 import { Matches } from "./Matches"
 import { Plans } from "./Plans"
 import {
@@ -80,9 +80,36 @@ export function OnboardingForm({
   const [viewer, setViewer] = useState<OnboardingInput | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoaded(false)
+    sessionToken(getToken)
+      .then((token) => getOnboarding(token))
+      .then((profile) => {
+        if (cancelled || !profile) return
+        setDraft(draftFromProfile(profile))
+        setViewer(profile)
+        setPhase("people")
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setSaveError(err.message)
+      })
+      .finally(() => {
+        if (!cancelled) setLoaded(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [getToken])
 
   const step = FLOW_STEPS[stepIndex] ?? FLOW_STEPS[0]
   const topic = PROFILE_FIELDS.find((field) => field.key === step.id)
+
+  if (!loaded) {
+    return <p className="note">Loading your profile...</p>
+  }
 
   function updateTopic(key: TopicKey, side: keyof TopicDraft, value: string) {
     setDraft((current) => ({
