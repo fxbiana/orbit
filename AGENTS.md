@@ -108,6 +108,7 @@ The API container runs `flask --debug` on port 5000. The website container runs 
 | GET | `/api/me` | Clerk session |
 | GET | `/api/onboarding` | Clerk session |
 | PUT | `/api/onboarding` | Clerk session, JSON onboarding profile |
+| GET | `/api/matches` | Clerk session; optional `limit` (default 10, max 50) |
 | GET | `/api/tickets` | Clerk session |
 | POST | `/api/tickets` | Clerk session, JSON `{ "title", "url" }` |
 

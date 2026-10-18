@@ -70,3 +70,19 @@ export function saveOnboarding(token: string, profile: OnboardingInput) {
     body: JSON.stringify(profile),
   })
 }
+
+export type Match = {
+  user_id: string
+  username: string
+  first_name: string
+  location: string
+  age: number | null
+  gathering_size: string
+  compatibility_score: number
+  matched_on: string[]
+}
+
+export function listMatches(token: string, limit = 10) {
+  const query = new URLSearchParams({ limit: String(limit) })
+  return request<{ matches: Match[] }>(`/api/matches?${query}`, token)
+}

@@ -32,6 +32,12 @@ def test_onboarding_requires_a_user_id(client):
     assert write.get_json()["error"] == "X-User-Id is required"
 
 
+def test_matches_requires_a_user_id(client):
+    response = client.get("/api/matches")
+    assert response.status_code == 401
+    assert response.get_json()["error"] == "X-User-Id is required"
+
+
 def test_post_ticket_requires_a_user_id(client):
     response = client.post(
         "/api/tickets",

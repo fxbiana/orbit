@@ -173,6 +173,46 @@ def save_onboarding(clerk_user_id: str, profile: dict) -> tuple[dict, bool]:
     return onboarding_response(clerk_user_id, payload, _iso), created
 
 
+def _user_id_from_onboarding_snap(snap) -> str | None:
+    """Derive the owning user id from ``users/{uid}/profile/onboarding``."""
+    data = snap.to_dict() or {}
+    stored = data.get("user_id")
+    if isinstance(stored, str) and stored:
+        return stored
+    reference = getattr(snap, "reference", None)
+    path = getattr(reference, "path", None) if reference is not None else None
+    if isinstance(path, str):
+        parts = path.split("/")
+        if len(parts) >= 4 and parts[0] == "users" and parts[2] == "profile":
+            return parts[1]
+    return None
+
+
+def list_onboarding_peers(exclude_user_id: str) -> list[dict]:
+    """Load every onboarding profile except the caller's.
+
+    Uses a collection-group scan on ``profile`` documents named ``onboarding``.
+    Parent ``users/{id}`` documents are not required to exist.
+    """
+    try:
+        snaps = firestore_client().collection_group("profile").stream()
+        peers: list[dict] = []
+        for snap in snaps:
+            if snap.id != "onboarding":
+                continue
+            user_id = _user_id_from_onboarding_snap(snap)
+            if not user_id or user_id == exclude_user_id:
+                continue
+            data = snap.to_dict() or {}
+            peers.append(onboarding_response(user_id, data, _iso))
+        return peers
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Firestore onboarding peer list failed")
+        abort(503, description="Firestore request failed")
+
+
 def create_ticket(clerk_user_id: str, title: str, url: str) -> dict:
     ticket_id = str(uuid.uuid4())
     created_at = datetime.now(timezone.utc)
