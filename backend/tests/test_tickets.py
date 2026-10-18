@@ -62,13 +62,6 @@ class _Clock:
         return datetime(2026, 1, 1, 0, 0, self._second, tzinfo=timezone.utc)
 
 
-class _SignedIn:
-    def __init__(self, user_id):
-        self.is_signed_in = True
-        self.reason = None
-        self.payload = {"sub": user_id}
-
-
 @pytest.fixture(autouse=True)
 def fake_firestore(monkeypatch):
     client = MemoryFirestore()
@@ -78,19 +71,22 @@ def fake_firestore(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def signed_in(monkeypatch):
-    def authenticate_request(flask_request, options):
-        user_id = flask_request.headers.get("X-Test-User", "user_test")
-        return _SignedIn(user_id)
+def default_caller(monkeypatch):
+    """Requests without X-User-Id act as user_test. A header selects another caller."""
 
-    monkeypatch.setattr("app.auth.authenticate_request", authenticate_request)
+    def read_local_user_id():
+        from flask import request
+
+        return (request.headers.get("X-User-Id") or "").strip() or "user_test"
+
+    monkeypatch.setattr("app.auth.read_local_user_id", read_local_user_id)
 
 
 def _post(client, title, url, user="user_test"):
     return client.post(
         "/api/tickets",
         json={"title": title, "url": url},
-        headers={"X-Test-User": user},
+        headers={"X-User-Id": user},
     )
 
 
@@ -99,7 +95,7 @@ def test_me_returns_the_signed_in_user(client):
     assert response.status_code == 200
     assert response.get_json() == {"user_id": "user_test"}
 
-    other = client.get("/api/me", headers={"X-Test-User": "user_other"})
+    other = client.get("/api/me", headers={"X-User-Id": "user_other"})
     assert other.status_code == 200
     assert other.get_json() == {"user_id": "user_other"}
 
@@ -165,7 +161,7 @@ def test_tickets_are_private_to_each_user(client):
     assert mine.status_code == 200
     assert [ticket["title"] for ticket in mine.get_json()["tickets"]] == ["Mine"]
 
-    theirs = client.get("/api/tickets", headers={"X-Test-User": "user_other"})
+    theirs = client.get("/api/tickets", headers={"X-User-Id": "user_other"})
     assert theirs.status_code == 200
     assert [ticket["title"] for ticket in theirs.get_json()["tickets"]] == ["Theirs"]
 
@@ -226,7 +222,7 @@ def test_post_ticket_ignores_a_user_id_in_the_body(client):
     mine = client.get("/api/tickets")
     assert [ticket["title"] for ticket in mine.get_json()["tickets"]] == ["Mine"]
 
-    theirs = client.get("/api/tickets", headers={"X-Test-User": "user_other"})
+    theirs = client.get("/api/tickets", headers={"X-User-Id": "user_other"})
     assert theirs.get_json()["tickets"] == []
 
 

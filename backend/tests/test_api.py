@@ -7,25 +7,68 @@ def test_health(client):
     assert response.get_json()["status"] == "ok"
 
 
-def test_tickets_require_a_session_token(client):
+def test_tickets_require_a_user_id(client):
     response = client.get("/api/tickets")
     assert response.status_code == 401
-    assert response.get_json()["error"] == "SESSION_TOKEN_MISSING"
+    assert response.get_json()["error"] == "X-User-Id is required"
 
 
-def test_me_requires_a_session_token(client):
+def test_me_requires_a_user_id(client):
     response = client.get("/api/me")
     assert response.status_code == 401
-    assert response.get_json()["error"] == "SESSION_TOKEN_MISSING"
+    assert response.get_json()["error"] == "X-User-Id is required"
 
 
-def test_post_ticket_requires_a_session_token(client):
+def test_onboarding_requires_a_user_id(client):
+    read = client.get("/api/onboarding")
+    assert read.status_code == 401
+    assert read.get_json()["error"] == "X-User-Id is required"
+
+    write = client.put(
+        "/api/onboarding",
+        json={"username": "amira", "first_name": "Amira"},
+    )
+    assert write.status_code == 401
+    assert write.get_json()["error"] == "X-User-Id is required"
+
+
+def test_post_ticket_requires_a_user_id(client):
     response = client.post(
         "/api/tickets",
         json={"title": "A tab", "url": "https://example.com/tab"},
     )
     assert response.status_code == 401
-    assert response.get_json()["error"] == "SESSION_TOKEN_MISSING"
+    assert response.get_json()["error"] == "X-User-Id is required"
+
+
+def test_user_id_rejects_a_path_character(client):
+    response = client.get("/api/me", headers={"X-User-Id": "../other"})
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "X-User-Id is invalid"
+
+
+def test_user_id_header_is_the_caller(client):
+    response = client.get(
+        "/api/me",
+        headers={"X-User-Id": "local_browser"},
+    )
+    assert response.status_code == 200
+    assert response.get_json() == {"user_id": "local_browser"}
+
+
+def test_preflight_allows_the_user_header(client):
+    origin = "chrome-extension://gpnknnpdogpdgeejedabdihnacblhmmj"
+    response = client.options(
+        "/api/tickets",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "x-user-id,content-type",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["Access-Control-Allow-Origin"] == origin
+    assert "x-user-id" in response.headers["Access-Control-Allow-Headers"].lower()
 
 
 def test_ready_without_firebase_credentials(client):

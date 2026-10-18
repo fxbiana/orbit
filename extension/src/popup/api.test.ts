@@ -21,11 +21,11 @@ describe("api", () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ tickets: [] }))
     vi.stubGlobal("fetch", fetchMock)
 
-    await listTickets("session-token")
+    await listTickets("local_user")
 
     expect(fetchMock).toHaveBeenCalledWith("http://localhost:5000/api/tickets", {
       headers: {
-        Authorization: "Bearer session-token",
+        "X-User-Id": "local_user",
         "Content-Type": "application/json",
       },
     })
@@ -36,7 +36,7 @@ describe("api", () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ tickets: [] }))
     vi.stubGlobal("fetch", fetchMock)
 
-    await listTickets("session-token")
+    await listTickets("local_user")
 
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.example.com/api/tickets",
@@ -56,7 +56,7 @@ describe("api", () => {
     vi.stubGlobal("fetch", fetchMock)
 
     await expect(
-      createTicket("session-token", {
+      createTicket("local_user", {
         title: "Docs",
         url: "https://example.com/docs",
       }),
@@ -66,7 +66,7 @@ describe("api", () => {
       method: "POST",
       body: JSON.stringify({ title: "Docs", url: "https://example.com/docs" }),
       headers: {
-        Authorization: "Bearer session-token",
+        "X-User-Id": "local_user",
         "Content-Type": "application/json",
       },
     })
@@ -78,11 +78,11 @@ describe("api", () => {
       vi.fn().mockResolvedValue({
         ok: false,
         status: 400,
-        text: async () => "title and url are required",
+        json: async () => ({ error: "title and url are required" }),
       }),
     )
 
-    await expect(listTickets("session-token")).rejects.toThrow("title and url are required")
+    await expect(listTickets("local_user")).rejects.toThrow("title and url are required")
   })
 
   it("throws the status code when the error body is empty", async () => {
@@ -91,10 +91,12 @@ describe("api", () => {
       vi.fn().mockResolvedValue({
         ok: false,
         status: 503,
-        text: async () => "",
+        json: async () => {
+          throw new Error("not json")
+        },
       }),
     )
 
-    await expect(listTickets("session-token")).rejects.toThrow("503")
+    await expect(listTickets("local_user")).rejects.toThrow("503")
   })
 })

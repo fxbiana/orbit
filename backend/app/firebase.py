@@ -9,6 +9,7 @@ from flask import abort, current_app
 from werkzeug.exceptions import HTTPException
 
 from app.config import ROOT
+from app.onboarding import onboarding_response
 
 log = logging.getLogger(__name__)
 _firestore = None
@@ -111,6 +112,59 @@ def list_tickets(clerk_user_id: str) -> list[dict]:
     except Exception:
         log.exception("Firestore list failed")
         abort(503, description="Firestore request failed")
+
+
+def _onboarding(clerk_user_id: str):
+    return (
+        firestore_client()
+        .collection("users")
+        .document(clerk_user_id)
+        .collection("profile")
+        .document("onboarding")
+    )
+
+
+def get_onboarding(clerk_user_id: str) -> dict | None:
+    try:
+        snap = _onboarding(clerk_user_id).get()
+        if not snap.exists:
+            return None
+        data = snap.to_dict() or {}
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Firestore onboarding read failed")
+        abort(503, description="Firestore request failed")
+    return onboarding_response(clerk_user_id, data, _iso)
+
+
+def save_onboarding(clerk_user_id: str, profile: dict) -> tuple[dict, bool]:
+    """Create or replace the caller's onboarding profile.
+
+    Returns the API document and whether this write created it.
+    """
+    ref = _onboarding(clerk_user_id)
+    now = datetime.now(timezone.utc)
+    try:
+        snap = ref.get()
+        created = not snap.exists
+        created_at = now
+        if snap.exists:
+            previous = snap.to_dict() or {}
+            created_at = previous.get("created_at") or now
+        payload = {
+            "user_id": clerk_user_id,
+            **profile,
+            "created_at": created_at,
+            "updated_at": now,
+        }
+        ref.set(payload)
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Firestore onboarding write failed")
+        abort(503, description="Firestore request failed")
+    return onboarding_response(clerk_user_id, payload, _iso), created
 
 
 def create_ticket(clerk_user_id: str, title: str, url: str) -> dict:

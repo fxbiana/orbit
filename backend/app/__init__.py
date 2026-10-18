@@ -14,9 +14,11 @@ def create_app(config_override: dict | None = None) -> Flask:
     CORS(app, resources={r"/api/*": {"origins": app.config["CORS_ORIGINS"]}})
 
     from app.routes.health import bp as health_bp
+    from app.routes.onboarding import bp as onboarding_bp
     from app.routes.tickets import bp as tickets_bp
 
     app.register_blueprint(health_bp)
+    app.register_blueprint(onboarding_bp)
     app.register_blueprint(tickets_bp)
 
     @app.errorhandler(HTTPException)

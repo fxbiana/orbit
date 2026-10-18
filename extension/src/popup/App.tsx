@@ -1,54 +1,45 @@
-import {
-  ClerkProvider,
-  Show,
-  SignInButton,
-  UserButton,
-  useAuth,
-} from "@clerk/chrome-extension"
 import { useEffect, useState } from "react"
 import { readActiveTab } from "../tabs"
 import { createTicket, listTickets, type Ticket } from "./api"
-const POPUP_URL = chrome.runtime.getURL("src/popup/index.html")
+import { localUserId } from "./localUser"
+import { OnboardingForm } from "./OnboardingForm"
 
 export function App() {
-  const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
-  if (!publishableKey) {
-    return (
-      <main className="popup">
-        <h1>Ticket Trapper</h1>
-        <p>Set VITE_CLERK_PUBLISHABLE_KEY in extension/.env, then restart the extension dev server.</p>
-      </main>
-    )
-  }
+  const [userId, setUserId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    localUserId()
+      .then((id) => {
+        if (!cancelled) setUserId(id)
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setError(err.message)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   return (
-    <ClerkProvider
-      publishableKey={publishableKey}
-      afterSignOutUrl={POPUP_URL}
-      signInFallbackRedirectUrl={POPUP_URL}
-      signUpFallbackRedirectUrl={POPUP_URL}
-    >
-      <main className="popup">
-        <header className="bar">
-          <h1>Ticket Trapper</h1>
-          <Show when="signed-in">
-            <UserButton />
-          </Show>
-        </header>
-        <Show when="signed-out">
-          <p>Sign in to save the page you are on.</p>
-          <SignInButton />
-        </Show>
-        <Show when="signed-in">
-          <TicketPanel />
-        </Show>
-      </main>
-    </ClerkProvider>
+    <main className="popup">
+      <header className="bar">
+        <h1>Ticket Trapper</h1>
+      </header>
+      {error ? <p className="error">{error}</p> : null}
+      {!userId && !error ? <p>Loading...</p> : null}
+      {userId ? (
+        <>
+          <OnboardingForm userId={userId} />
+          <TicketPanel userId={userId} />
+        </>
+      ) : null}
+    </main>
   )
 }
 
-function TicketPanel() {
-  const { getToken } = useAuth()
+function TicketPanel({ userId }: { userId: string }) {
   const [tab, setTab] = useState<{ title: string; url: string } | null>(null)
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -65,11 +56,7 @@ function TicketPanel() {
         if (!cancelled) setError(err.message)
       })
 
-    getToken()
-      .then((token) => {
-        if (!token) throw new Error("No session token")
-        return listTickets(token)
-      })
+    listTickets(userId)
       .then((body) => {
         if (!cancelled) setTickets(body.tickets)
       })
@@ -80,17 +67,15 @@ function TicketPanel() {
     return () => {
       cancelled = true
     }
-  }, [getToken])
+  }, [userId])
 
   async function save() {
     if (!tab) return
     setSaving(true)
     setError(null)
     try {
-      const token = await getToken()
-      if (!token) throw new Error("No session token")
-      await createTicket(token, tab)
-      const body = await listTickets(token)
+      await createTicket(userId, tab)
+      const body = await listTickets(userId)
       setTickets(body.tickets)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed")
