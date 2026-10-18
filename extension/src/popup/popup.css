@@ -6,7 +6,8 @@
 
 html,
 body {
-  width: 380px;
+  width: 520px;
+  min-height: 560px;
   margin: 0;
 }
 
@@ -169,7 +170,7 @@ button.ghost {
 
 .people {
   list-style: none;
-  max-height: 220px;
+  max-height: 360px;
   margin: 8px 0 0;
   padding: 0;
   overflow: auto;

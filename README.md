@@ -8,15 +8,15 @@ The popup is React. The API is Flask. Clerk signs the user in. Firestore stores 
 
 ## Docker
 
-Copy the env files, set `CLERK_SECRET_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`, and `FIREBASE_CREDENTIALS_PATH` (absolute path of the service account JSON), then from the repo root:
+Copy the env files, set `CLERK_SECRET_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`, and `FIREBASE_CREDENTIALS_PATH` (absolute path of the service account JSON). Ports 5000 and 5173 need to be free. From the repo root:
 
 ```bash
 docker compose up --build
 ```
 
-The API is on port 5000. A save under `backend/` restarts that process. The extension dev server is on port 5173. A save under `extension/` rebuilds `extension/dist`. Load that `dist` directory once in `chrome://extensions`. Later saves refresh the popup through the dev server.
+The API is on port 5000. A save under `backend/` restarts that process. The extension dev server is on port 5173. Load `extension/dist` once in `chrome://extensions`. A later save under `extension/` refreshes the popup through that dev server.
 
-`VITE_API_BASE_URL` stays `http://localhost:5000`. The popup runs in Chrome on the host. A change to either `.env` file is picked up by `docker compose restart api` or `docker compose restart extension`.
+`VITE_API_BASE_URL` stays `http://localhost:5000`. The popup runs in Chrome on the host. `docker compose restart api` re-reads the root `.env`. `docker compose restart extension` re-reads `extension/.env`. A different `FIREBASE_CREDENTIALS_PATH` needs `docker compose up` again, because that path is the file mounted into the API container.
 
 After the stack is up, write the 100 sample profiles:
 

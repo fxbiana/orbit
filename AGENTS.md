@@ -49,7 +49,7 @@ Docker, from the repo root, after both env files exist and `FIREBASE_CREDENTIALS
 docker compose up --build
 ```
 
-The API container runs `flask --debug` on port 5000 and restarts the process when a file under `backend/` changes. The extension container runs Vite on port 5173, polls for saves, and rebuilds `extension/dist` on the host. `docker compose exec api python seed_profiles.py` writes the sample profiles. `docker compose exec api pytest` runs the API tests.
+The API container runs `flask --debug` on port 5000 and restarts the process when a file under `backend/` changes. The extension container runs Vite on port 5173, polls for saves, and refreshes the popup. Chrome loads `extension/dist` from the host. `docker compose exec api python seed_profiles.py` writes the sample profiles. `docker compose exec api pytest` runs the API tests.
 
 ## Routes
 
