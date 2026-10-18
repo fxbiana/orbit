@@ -45,11 +45,11 @@ function Site() {
       </header>
       <Show when="signed-out">
         <Hero />
+        <FutureExtension />
       </Show>
       <Show when="signed-in">
         <SignedIn />
       </Show>
-      <FutureExtension />
     </div>
   )
 }

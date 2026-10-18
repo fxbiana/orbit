@@ -1,16 +1,16 @@
 # Setup
 
-Ticket Trapper needs Python, Node, Chrome, and one Firebase project with Firestore. Development and production use that same Firebase project for this hackathon. There is no emulator and no second database.
+Ticket Trapper needs Python, Node, and one Firebase project with Firestore. Development and production use that same Firebase project for this hackathon. There is no emulator and no second database.
 
-The unpacked extension id is `gpnknnpdogpdgeejedabdihnacblhmmj`. `CORS_ORIGINS` uses the origin `chrome-extension://gpnknnpdogpdgeejedabdihnacblhmmj`.
+The MVP product is the website at `http://localhost:5174`. The Chrome extension is later. Its unpacked id is `gpnknnpdogpdgeejedabdihnacblhmmj` when you load it.
 
 ## Software
 
 | Tool | Version | Used for |
 | --- | --- | --- |
 | Python | 3.10 or newer | Flask API |
-| Node.js | 20.9 or newer | Extension build |
-| Chrome | current stable | Load the unpacked extension |
+| Node.js | 20.9 or newer | Website build |
+| Chrome | current stable | Browse the site (and load the extension later) |
 
 From the repo root, confirm the first two:
 
@@ -21,9 +21,9 @@ node --version
 
 ## Sign-in
 
-The popup signs in with Clerk. `AUTH_MODE=clerk` in the root `.env` makes the API require a Clerk session token. Firestore stores that Clerk user's tickets and onboarding profile.
+The website signs in with Clerk. `AUTH_MODE=clerk` in the root `.env` makes the API require a Clerk session token. Firestore stores that Clerk user's tickets and onboarding profile.
 
-In the Clerk dashboard, turn on the Native API and add `chrome-extension://gpnknnpdogpdgeejedabdihnacblhmmj` to allowed origins. Email code and password fit the popup. A full-page OAuth redirect does not.
+In the Clerk dashboard, allow `http://localhost:5174` (and `http://127.0.0.1:5174` if you use that host). When you work on the extension later, also allow `chrome-extension://gpnknnpdogpdgeejedabdihnacblhmmj` and turn on the Native API for that origin.
 
 ## Firebase
 
@@ -34,15 +34,15 @@ Use one Firebase project for local development and for production.
 3. Keep the file outside git. The repo ignores `*-firebase-adminsdk-*.json` and `service-account*.json`.
 4. Set `FIREBASE_CREDENTIALS_PATH` in the root `.env` to that file's absolute path.
 
-The API reads and writes `users/{clerkUserId}/tickets/{ticketId}` with the Firebase Admin SDK. The extension does not use a Firebase client.
+The API reads and writes `users/{clerkUserId}/tickets/{ticketId}` and `users/{clerkUserId}/profile/onboarding` with the Firebase Admin SDK. The website does not use a Firebase client.
 
 ## Env files
 
-Two files. Both are gitignored.
+Two files for the MVP. Both are gitignored.
 
 ```bash
 cp .env.example .env
-cp extension/.env.example extension/.env
+cp web/.env.example web/.env
 ```
 
 Root `.env`, read by the API:
@@ -51,34 +51,35 @@ Root `.env`, read by the API:
 | --- | --- | --- |
 | `AUTH_MODE` | already set | `clerk` |
 | `CLERK_SECRET_KEY` | yes, for signed-in routes | Clerk secret key |
-| `CLERK_AUTHORIZED_PARTIES` | already set | `chrome-extension://gpnknnpdogpdgeejedabdihnacblhmmj` |
-| `CORS_ORIGINS` | already set | same origin |
+| `CLERK_AUTHORIZED_PARTIES` | already set | website origins, plus extension origins for later |
+| `CORS_ORIGINS` | already set | same list |
 | `CLERK_JWT_KEY` | no | PEM public key from the Clerk API keys page. When set, the API checks tokens on this machine. When empty, it fetches Clerk's keys with the secret key. |
-| `FIREBASE_CREDENTIALS_PATH` | yes, for tickets and `/ready` | Absolute path to the Firebase service account JSON for the shared project |
+| `FIREBASE_CREDENTIALS_PATH` | yes, for tickets, onboarding, and `/ready` | Absolute path to the Firebase service account JSON for the shared project |
 
-`extension/.env`, read by Vite:
+`web/.env`, read by Vite:
 
 | Variable | Required | Value |
 | --- | --- | --- |
+| `VITE_CLERK_PUBLISHABLE_KEY` | yes | Clerk publishable key |
 | `VITE_API_BASE_URL` | already set | `http://localhost:5000` |
 
 ## Docker
 
-Docker Desktop is enough. From the repo root, after both env files exist and `FIREBASE_CREDENTIALS_PATH` is the absolute path of the service account JSON, with ports 5000 and 5173 free:
+Docker Desktop is enough. From the repo root, after both env files exist and `FIREBASE_CREDENTIALS_PATH` is the absolute path of the service account JSON, with ports 5000 and 5174 free:
 
 ```bash
 docker compose up --build
 ```
 
-That starts two containers. The API container runs `flask --debug` on port 5000. The reloader polls the bind-mounted `backend/` tree, so saving a Python file restarts the process. The extension container runs Vite on port 5173 and writes `extension/dist` on the host. Load that folder once as an unpacked extension. A later save is picked up by polling, and the dev server refreshes the popup.
+That starts two containers. The API container runs `flask --debug` on port 5000. The website container runs Vite on port 5174.
 
-Leave `VITE_API_BASE_URL` at `http://localhost:5000`. Chrome is outside Docker and uses the published port.
+Leave `VITE_API_BASE_URL` at `http://localhost:5000`. The browser is outside Docker and uses the published ports.
 
 `GET /health` and `GET /ready` are the same checks as below. `docker compose ps` shows both containers healthy once Vite is listening.
 
-`docker compose restart api` re-reads the root `.env`. `docker compose restart extension` re-reads `extension/.env`. A different `FIREBASE_CREDENTIALS_PATH` needs `docker compose up` again, because that path is the file mounted into the API container. After a `package-lock.json` or `requirements.txt` change, run `docker compose up --build` again.
+`docker compose restart api` re-reads the root `.env`. `docker compose restart web` re-reads `web/.env`. A different `FIREBASE_CREDENTIALS_PATH` needs `docker compose up` again, because that path is the file mounted into the API container. After a `package-lock.json` or `requirements.txt` change, run `docker compose up --build` again.
 
-Seed the sample profiles once the extension container has logged that Vite is ready. The seed command uses that container's Linux `node_modules`:
+Optional seed into Firestore (not required for the on-site match list):
 
 ```bash
 docker compose exec api python seed_profiles.py
@@ -90,7 +91,7 @@ Tests:
 docker compose exec api pytest
 ```
 
-`docker compose down` stops the containers and keeps the `node_modules` volume. The next sections are the same run, without Docker.
+`docker compose down` stops the containers and keeps the `web_node_modules` volume. The next sections are the same run, without Docker.
 
 ## API
 
@@ -111,11 +112,13 @@ curl -s http://localhost:5000/ready
 
 `/health` returns `{"status":"ok"}` with no credentials file. `/ready` returns the same body after Firebase Admin initializes and reads Firestore. If `FIREBASE_CREDENTIALS_PATH` is empty or the file is missing, `/ready` returns a JSON error that names that problem.
 
-`GET /api/tickets` with no `Authorization` header returns 401. The popup sends a Clerk session token.
+`GET /api/tickets` with no `Authorization` header returns 401. The website sends a Clerk session token.
 
 ## Sample profiles
 
-One hundred sample people live in `extension/src/popup/sampleProfiles.ts`. From `backend/`, with the virtualenv active and `FIREBASE_CREDENTIALS_PATH` set:
+One hundred sample people live in `web/src/sampleProfiles.ts`. The website ranks them in the browser after onboarding. The same people are committed as `backend/sample_people.json` for Firestore seeding.
+
+From `backend/`, with the virtualenv active and `FIREBASE_CREDENTIALS_PATH` set:
 
 ```bash
 python seed_profiles.py
@@ -129,35 +132,48 @@ Each document stores `username`, `first_name`, `location`, `age`, `gathering_siz
 
 Running the script again replaces those same 100 documents and keeps `created_at`.
 
-With the API running, read one profile. This one is Amira, who knows Dance:
+With the API running and `AUTH_MODE=local`, read one profile. This one is Amira, who knows Dance:
 
 ```bash
 curl -s http://localhost:5000/api/onboarding \
   -H "X-User-Id: 1ec93661-7c2e-413f-8fde-908dcf28e4ba"
 ```
 
-That request uses the local caller header. It answers when `AUTH_MODE=local`. With `AUTH_MODE=clerk`, the same path expects `Authorization: Bearer`.
+With `AUTH_MODE=clerk`, the same path expects `Authorization: Bearer`.
 
-## Extension
+If you change the generator in `web/src/sampleProfiles.ts`, refresh `backend/sample_people.json` before seeding again (export `SAMPLE_PEOPLE` from that module).
+
+## Website
 
 In another terminal:
 
 ```bash
-cd extension
+cd web
 npm install
 npm run dev
 ```
 
-Open `chrome://extensions`, turn on Developer mode, and load the `extension/dist` directory that the dev server prints. The manifest public key keeps the id at `gpnknnpdogpdgeejedabdihnacblhmmj`. If Chrome shows a different id, the loaded folder is not this `dist`.
+Open `http://localhost:5174`. Restart `npm run dev` after changing `web/.env`.
 
-Restart `npm run dev` after changing `extension/.env`. Reload the extension in `chrome://extensions` after a rebuild.
+Signed out, the hero explains the product and shows a static sample of the future extension. Signed in, the site walks through onboarding (prefilled so you can click through), then shows people ranked against those answers. Saved pages are under a details block on that screen.
 
-Open the toolbar popup. Signed out, it shows sign-in and sign-up. Signed in, it shows the onboarding flow, and after that the active tab, a Save ticket button, and tickets stored for that Clerk user.
+## Extension, later
 
-## What a finished setup can do
+```bash
+cd extension
+cp .env.example .env
+npm install
+npm run dev
+```
 
-With the root `.env`, `extension/.env`, and the extension loaded:
+Open `chrome://extensions`, turn on Developer mode, and load the `extension/dist` directory that the dev server prints. The manifest public key keeps the id at `gpnknnpdogpdgeejedabdihnacblhmmj`.
+
+## What a finished MVP setup can do
+
+With the root `.env`, `web/.env`, API on 5000, and site on 5174:
 
 1. `curl -s http://localhost:5000/ready` returns `{"status":"ok"}`.
-2. The popup signs in with the Clerk user.
-3. Save ticket writes the active tab to Firestore at `users/{clerkUserId}/tickets/{ticketId}`. The popup lists it on the next open.
+2. The site signs in with the Clerk user.
+3. Onboarding saves the profile to Firestore at `users/{clerkUserId}/profile/onboarding`.
+4. The match list ranks the sample set in the browser (no seed step required).
+5. Saving a page writes `users/{clerkUserId}/tickets/{ticketId}`.

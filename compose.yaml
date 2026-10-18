@@ -1,6 +1,8 @@
-# One command starts the API and the website.
+# One command starts the API and the website (MVP).
 # Saving a file under backend/ restarts the API process.
 # The extension is later. It is not started here.
+# docker compose exec api python seed_profiles.py is optional;
+# the website match list scores sample people in the browser.
 
 name: ticket-trapper
 
