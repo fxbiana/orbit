@@ -296,7 +296,6 @@ def list_open_plans(viewer_id: str) -> list[dict]:
         log.exception("Firestore open plans list failed")
         abort(503, description="Firestore request failed")
 
-
 def create_plan(host_id: str, fields: dict) -> dict:
     """Create a plan and auto-join the creator as host."""
     plan_id = str(uuid.uuid4())

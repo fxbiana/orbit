@@ -338,6 +338,8 @@ export function OnboardingForm({
 
     setError(null)
     setSaveError(null)
+    // Save before opening Matches/Plans. Those routes need the profile to exist;
+    // flipping phase first caused GET /api/matches to 404 while PUT was still in flight.
     try {
       const token = await sessionToken(getToken)
       await saveOnboarding(token, input)
@@ -347,6 +349,8 @@ export function OnboardingForm({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed")
     }
+    setViewer(input)
+    setPhase("people")
   }
 
   if (phase === "people" && viewer) {
