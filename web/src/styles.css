@@ -311,6 +311,7 @@ input[type="radio"] {
 .plan-form input,
 .plan-form select,
 .reach-form input,
+.reach-form select,
 .reach-form textarea,
 .connect-form input {
   display: block;
@@ -492,11 +493,81 @@ h3 {
   margin-top: 8px;
 }
 
-.profile,
 .reach {
   margin-top: 32px;
   padding-top: 8px;
   border-top: 1px solid var(--line);
+}
+
+.profile-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.profile-pop {
+  position: fixed;
+  top: 76px;
+  right: max(20px, calc((100vw - 880px) / 2));
+  z-index: 21;
+  width: min(340px, calc(100vw - 32px));
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+  margin: 0;
+  padding: 12px 14px 8px;
+  border-radius: 14px;
+  background: var(--linen);
+  box-shadow: 0 16px 40px rgba(74, 46, 36, 0.18);
+}
+
+.reach-dense {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 8px;
+}
+
+.reach-dense label,
+.reach-form-dense .actions {
+  margin-top: 0;
+}
+
+.reach-dense label {
+  font-size: 12px;
+}
+
+.reach-dense .span {
+  grid-column: 1 / -1;
+}
+
+.reach-dense input,
+.reach-dense select {
+  min-height: 32px;
+  margin-top: 2px;
+  padding: 4px 8px;
+}
+
+.reach-form-dense .actions {
+  margin-top: 8px;
+}
+
+.reach-form-dense .note,
+.reach-form-dense .error {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+
+.profile-pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.profile-pop-head h2 {
+  margin: 0;
 }
 
 .socials {

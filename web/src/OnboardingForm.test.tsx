@@ -87,10 +87,8 @@ it("opens the saved profile and lists people from the match API", async () => {
   expect(await screen.findByRole("heading", { name: "Ada" })).toBeInTheDocument()
   expect(screen.getByRole("heading", { name: "Priya, people near you" })).toBeInTheDocument()
   expect(screen.queryByText("Showing sample people")).not.toBeInTheDocument()
-  expect(screen.getByRole("heading", { name: "Profile" })).toBeInTheDocument()
-  expect(screen.getByRole("button", { name: "Edit profile" })).toBeInTheDocument()
+  expect(screen.queryByRole("heading", { name: "Contact ways" })).not.toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Ask to connect" })).toBeInTheDocument()
-  expect(await screen.findByRole("heading", { name: "How you want to be reached" })).toBeInTheDocument()
 })
 
 it("asks how to be reached as the last onboarding step and again from the profile", async () => {
@@ -103,9 +101,10 @@ it("asks how to be reached as the last onboarding step and again from the profil
     reach_note: "Evenings",
     updated_at: null,
   })
-  render(<OnboardingForm getToken={async () => "session-token"} />)
+  render(<OnboardingForm getToken={async () => "session-token"} profileOpen />)
 
-  fireEvent.click(await screen.findByRole("button", { name: "Edit profile" }))
+  expect(await screen.findByRole("dialog", { name: "Contact ways" })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Edit profile" }))
   expect(screen.getByRole("heading", { name: "Who you are" })).toBeInTheDocument()
   expect(screen.getByText("Step 1 of 9")).toBeInTheDocument()
 
@@ -119,7 +118,8 @@ it("asks how to be reached as the last onboarding step and again from the profil
   fireEvent.change(instagram, { target: { value: "priya.new" } })
   fireEvent.click(screen.getByRole("button", { name: "Find your people" }))
 
-  expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument()
+  expect(await screen.findByRole("heading", { name: "Priya, people near you" })).toBeInTheDocument()
+  expect(screen.queryByRole("heading", { name: "Contact ways" })).not.toBeInTheDocument()
   expect(saveContact).toHaveBeenCalledWith("session-token", {
     instagram: "priya.new",
     discord: "",

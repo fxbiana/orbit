@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react"
+import { FormEvent, ReactNode, useEffect, useState } from "react"
 import {
   acceptConnection,
   getContact,
@@ -103,10 +103,62 @@ export function contactToSave(draft: ContactDraft) {
 export function ReachFields({
   draft,
   onChange,
+  dense = false,
 }: {
   draft: ContactDraft
   onChange: (next: ContactDraft) => void
+  dense?: boolean
 }) {
+  if (dense) {
+    const handles = [
+      ["instagram", "Instagram", "amira.learns"],
+      ["discord", "Discord", "amira"],
+      ["snapchat", "Snapchat", "amira"],
+    ] as const
+    return (
+      <div className="reach-dense">
+        {handles.map(([key, label, placeholder]) => (
+          <label key={key} htmlFor={key}>
+            {label}
+            <input
+              id={key}
+              value={draft[key]}
+              autoComplete="off"
+              placeholder={placeholder}
+              onChange={(event) => onChange({ ...draft, [key]: event.target.value })}
+            />
+          </label>
+        ))}
+        <label htmlFor="preferred-channel">
+          Where you answer
+          <select
+            id="preferred-channel"
+            value={draft.preferred}
+            onChange={(event) =>
+              onChange({ ...draft, preferred: event.target.value as ContactDraft["preferred"] })
+            }
+          >
+            <option value="">No preference</option>
+            <option value="orbit">Messages on Orbit</option>
+            <option value="instagram">Instagram</option>
+            <option value="discord">Discord</option>
+            <option value="snapchat">Snapchat</option>
+          </select>
+        </label>
+        <label className="span" htmlFor="reach-note">
+          When you reply
+          <input
+            id="reach-note"
+            maxLength={160}
+            value={draft.reach_note}
+            placeholder="Evenings on Discord"
+            onChange={(event) => onChange({ ...draft, reach_note: event.target.value })}
+          />
+        </label>
+      </div>
+    )
+  }
+
   return (
     <>
       <label htmlFor="instagram">
@@ -368,7 +420,13 @@ function FriendCard({
   )
 }
 
-export function ContactForm({ getToken }: { getToken: () => Promise<string | null> }) {
+export function ContactForm({
+  getToken,
+  sideAction,
+}: {
+  getToken: () => Promise<string | null>
+  sideAction?: ReactNode
+}) {
   const [draft, setDraft] = useState<ContactDraft>(EMPTY_DRAFT)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
@@ -412,15 +470,14 @@ export function ContactForm({ getToken }: { getToken: () => Promise<string | nul
   }
 
   return (
-    <form className="reach-form" onSubmit={onSave}>
-      <h3>How you want to be reached</h3>
-      <ReachFields draft={draft} onChange={setDraft} />
+    <form className="reach-form reach-form-dense" onSubmit={onSave}>
+      <ReachFields dense draft={draft} onChange={setDraft} />
       {saveError ? <p className="error">{saveError}</p> : null}
       {saved ? <p className="note">Saved. People see this after you both accept.</p> : null}
       <div className="actions">
-        <span />
+        {sideAction ?? <span />}
         <button type="submit" disabled={saving}>
-          {saving ? "Saving…" : "Save reach info"}
+          {saving ? "Saving…" : "Save"}
         </button>
       </div>
     </form>

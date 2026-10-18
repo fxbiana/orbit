@@ -97,12 +97,59 @@ function toInput(draft: Draft): OnboardingInput {
   return input
 }
 
+function ProfilePanel({
+  getToken,
+  saveError,
+  onClose,
+  onEdit,
+}: {
+  getToken: () => Promise<string | null>
+  saveError: string | null
+  onClose: () => void
+  onEdit: () => void
+}) {
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose()
+    }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [onClose])
+
+  return (
+    <>
+      <button type="button" className="profile-backdrop" aria-label="Close contact ways" onClick={onClose} />
+      <section className="profile-pop" role="dialog" aria-modal="true" aria-labelledby="profile-title">
+        <div className="profile-pop-head">
+          <h2 id="profile-title">Contact ways</h2>
+          <button type="button" className="ghost" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        <ContactForm
+          getToken={getToken}
+          sideAction={
+            <button type="button" className="ghost" onClick={onEdit}>
+              Edit profile
+            </button>
+          }
+        />
+        {saveError ? <p className="error">Profile was not saved. {saveError}</p> : null}
+      </section>
+    </>
+  )
+}
+
 export function OnboardingForm({
   getToken,
   extras,
+  profileOpen = false,
+  onProfileClose,
 }: {
   getToken: () => Promise<string | null>
   extras?: ReactNode
+  profileOpen?: boolean
+  onProfileClose?: () => void
 }) {
   const [draft, setDraft] = useState<Draft>(emptyDraft)
   const [contact, setContact] = useState<ContactDraft>(EMPTY_CONTACT)
@@ -113,6 +160,7 @@ export function OnboardingForm({
   const [saveError, setSaveError] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [reachKey, setReachKey] = useState(0)
+  const [profileDismissed, setProfileDismissed] = useState(false)
   const [links, setLinks] = useState<Record<string, LinkStatus>>({})
   const onLinks = useCallback((next: Record<string, LinkStatus>) => {
     setLinks(next)
@@ -156,8 +204,29 @@ export function OnboardingForm({
     }
   }, [getToken])
 
+  useEffect(() => {
+    if (profileOpen) setProfileDismissed(false)
+  }, [profileOpen])
+
   const step = FLOW_STEPS[stepIndex] ?? FLOW_STEPS[0]
   const topic = PROFILE_FIELDS.find((field) => field.key === step.id)
+
+  function closeProfile() {
+    setProfileDismissed(true)
+    onProfileClose?.()
+  }
+
+  function editProfile() {
+    closeProfile()
+    setError(null)
+    setStepIndex(0)
+    setPhase("pages")
+  }
+
+  const profilePanel =
+    loaded && profileOpen && !profileDismissed ? (
+      <ProfilePanel getToken={getToken} saveError={saveError} onClose={closeProfile} onEdit={editProfile} />
+    ) : null
 
   if (!loaded) {
     return <p className="note">Loading your profile...</p>
@@ -226,27 +295,7 @@ export function OnboardingForm({
           links={links}
           onConnected={() => setReachKey((key) => key + 1)}
         />
-        <section className="profile" id="profile">
-          <h2>Profile</h2>
-          <p className="note">
-            Update how people reach you. Connected people can see this. Your other answers stay
-            under Edit profile.
-          </p>
-          <ContactForm getToken={getToken} />
-          {saveError ? <p className="error">Profile was not saved. {saveError}</p> : null}
-          <div className="actions">
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => {
-                setStepIndex(0)
-                setPhase("pages")
-              }}
-            >
-              Edit profile
-            </button>
-          </div>
-        </section>
+        {profilePanel}
         <Reach getToken={getToken} refreshKey={reachKey} onLinks={onLinks} />
         <Plans getToken={getToken} />
         {extras ? (
@@ -262,6 +311,8 @@ export function OnboardingForm({
   const last = stepIndex === FLOW_STEPS.length - 1
 
   return (
+    <>
+    {profilePanel}
     <form className="flow onboarding" onSubmit={last ? finish : goNext}>
       <p className="step-count">
         Step {stepIndex + 1} of {FLOW_STEPS.length}
@@ -284,7 +335,7 @@ export function OnboardingForm({
       {step.id === "reach" ? (
         <p className="note">
           Optional. Usernames only. Connected people can see this, and you can change it later from
-          your profile.
+          Contact ways in the account menu.
         </p>
       ) : null}
 
@@ -401,5 +452,6 @@ export function OnboardingForm({
         </button>
       </div>
     </form>
+    </>
   )
 }

@@ -39,7 +39,24 @@ export function App() {
   )
 }
 
+function ProfileIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+      <circle cx="8" cy="5.5" r="2.4" fill="currentColor" />
+      <path
+        d="M3.2 13.2c.7-2.2 2.4-3.3 4.8-3.3s4.1 1.1 4.8 3.3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 function Site() {
+  const [profileOpen, setProfileOpen] = useState(false)
+
   return (
     <div className="hall">
       <header className="top">
@@ -58,7 +75,17 @@ function Site() {
             </SignUpButton>
           </Show>
           <Show when="signed-in">
-            <UserButton />
+            <UserButton>
+              <UserButton.MenuItems>
+                <UserButton.Action
+                  label="Contact ways"
+                  labelIcon={<ProfileIcon />}
+                  onClick={() => setProfileOpen(true)}
+                />
+                <UserButton.Action label="manageAccount" />
+                <UserButton.Action label="signOut" />
+              </UserButton.MenuItems>
+            </UserButton>
           </Show>
         </div>
       </header>
@@ -67,7 +94,7 @@ function Site() {
         <FutureExtension />
       </Show>
       <Show when="signed-in">
-        <SignedIn />
+        <SignedIn profileOpen={profileOpen} onProfileClose={() => setProfileOpen(false)} />
       </Show>
     </div>
   )
@@ -97,7 +124,13 @@ function Hero() {
   )
 }
 
-function SignedIn() {
+function SignedIn({
+  profileOpen,
+  onProfileClose,
+}: {
+  profileOpen: boolean
+  onProfileClose: () => void
+}) {
   const { getToken } = useAuth()
   const [token, setToken] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -122,7 +155,14 @@ function SignedIn() {
     <section className="desk">
       {error ? <p className="error">{error}</p> : null}
       {!token && !error ? <p className="note">Loading your session...</p> : null}
-      {token ? <OnboardingForm getToken={getToken} extras={<SavePage getToken={getToken} />} /> : null}
+      {token ? (
+        <OnboardingForm
+          getToken={getToken}
+          extras={<SavePage getToken={getToken} />}
+          profileOpen={profileOpen}
+          onProfileClose={onProfileClose}
+        />
+      ) : null}
     </section>
   )
 }
