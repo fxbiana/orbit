@@ -15,17 +15,20 @@ import {
   FLOW_STEPS,
   GATHERING_SIZES,
   ONBOARDING_LIMITS,
+  PREFERENCE_GROUP_LABELS,
   PROFILE_FIELDS,
-  TOPIC_KEYS,
   cleanText,
   formatList,
   parseList,
+  unionGrouped,
   validateFlowStep,
   validateOnboarding,
   type FlowStepId,
+  type Knowledge,
   type OnboardingInput,
-  type TopicKey,
 } from "./onboarding"
+import { importSpotify } from "./spotify"
+
 type TopicDraft = { knows: string; wants: string }
 
 type Draft = {
@@ -34,67 +37,80 @@ type Draft = {
   location: string
   age: string
   gatheringSize: string
-  topics: Record<TopicKey, TopicDraft>
+  languages: TopicDraft
+  preferences: TopicDraft
 }
 
 const EMPTY_CONTACT: ContactDraft = {
   instagram: "",
   discord: "",
   snapchat: "",
+  facebook: "",
   preferred: "",
   reach_note: "",
 }
 
+const languageField = PROFILE_FIELDS.find((field) => field.key === "languages") ?? PROFILE_FIELDS[0]
+
+function emptyKnowledge(): Knowledge {
+  return { knows: [], wants_to_learn: [] }
+}
+
 function emptyDraft(): Draft {
-  const topics = {} as Record<TopicKey, TopicDraft>
-  for (const key of TOPIC_KEYS) {
-    topics[key] = { knows: "", wants: "" }
-  }
   return {
     username: "",
     firstName: "",
     location: "",
     age: "",
     gatheringSize: "",
-    topics,
+    languages: { knows: "", wants: "" },
+    preferences: { knows: "", wants: "" },
   }
 }
 
 function draftFromProfile(profile: OnboardingInput): Draft {
-  const topics = {} as Record<TopicKey, TopicDraft>
-  for (const key of TOPIC_KEYS) {
-    topics[key] = {
-      knows: formatList(profile[key].knows),
-      wants: formatList(profile[key].wants_to_learn),
-    }
-  }
   return {
     username: profile.username,
     firstName: profile.first_name,
     location: profile.location,
     age: String(profile.age),
     gatheringSize: profile.gathering_size,
-    topics,
+    languages: {
+      knows: formatList(profile.languages.knows),
+      wants: formatList(profile.languages.wants_to_learn),
+    },
+    preferences: {
+      knows: formatList(unionGrouped(profile, "knows")),
+      wants: formatList(unionGrouped(profile, "wants_to_learn")),
+    },
   }
 }
 
 function toInput(draft: Draft): OnboardingInput {
   const ageText = draft.age.trim()
   const age = ageText === "" ? Number.NaN : Number(ageText)
-  const input = {
+  return {
     username: cleanText(draft.username),
     first_name: cleanText(draft.firstName),
     location: cleanText(draft.location),
     age: Number.isInteger(age) ? age : Number.NaN,
     gathering_size: draft.gatheringSize,
-  } as OnboardingInput
-  for (const key of TOPIC_KEYS) {
-    input[key] = {
-      knows: parseList(draft.topics[key].knows),
-      wants_to_learn: parseList(draft.topics[key].wants),
-    }
+    languages: {
+      knows: parseList(draft.languages.knows),
+      wants_to_learn: parseList(draft.languages.wants),
+    },
+    hobbies: emptyKnowledge(),
+    locations: emptyKnowledge(),
+    interests: {
+      knows: parseList(draft.preferences.knows),
+      wants_to_learn: parseList(draft.preferences.wants),
+    },
+    festivals: emptyKnowledge(),
   }
-  return input
+}
+
+function mergeCommaList(current: string, incoming: string[]): string {
+  return formatList(parseList(`${current},${incoming.join(",")}`))
 }
 
 function ProfilePanel({
@@ -162,6 +178,9 @@ export function OnboardingForm({
   const [reachKey, setReachKey] = useState(0)
   const [profileDismissed, setProfileDismissed] = useState(false)
   const [links, setLinks] = useState<Record<string, LinkStatus>>({})
+  const [spotifySummary, setSpotifySummary] = useState<string | null>(null)
+  const [spotifyError, setSpotifyError] = useState<string | null>(null)
+  const [spotifyBusy, setSpotifyBusy] = useState(false)
   const onLinks = useCallback((next: Record<string, LinkStatus>) => {
     setLinks(next)
   }, [])
@@ -184,6 +203,7 @@ export function OnboardingForm({
             instagram: storedContact.instagram,
             discord: storedContact.discord,
             snapchat: storedContact.snapchat,
+            facebook: storedContact.facebook,
             preferred: storedContact.preferred,
             reach_note: storedContact.reach_note,
           })
@@ -209,7 +229,6 @@ export function OnboardingForm({
   }, [profileOpen])
 
   const step = FLOW_STEPS[stepIndex] ?? FLOW_STEPS[0]
-  const topic = PROFILE_FIELDS.find((field) => field.key === step.id)
 
   function closeProfile() {
     setProfileDismissed(true)
@@ -232,13 +251,17 @@ export function OnboardingForm({
     return <p className="note">Loading your profile...</p>
   }
 
-  function updateTopic(key: TopicKey, side: keyof TopicDraft, value: string) {
+  function updateLanguages(side: keyof TopicDraft, value: string) {
     setDraft((current) => ({
       ...current,
-      topics: {
-        ...current.topics,
-        [key]: { ...current.topics[key], [side]: value },
-      },
+      languages: { ...current.languages, [side]: value },
+    }))
+  }
+
+  function updatePreferences(side: keyof TopicDraft, value: string) {
+    setDraft((current) => ({
+      ...current,
+      preferences: { ...current.preferences, [side]: value },
     }))
   }
 
@@ -256,6 +279,26 @@ export function OnboardingForm({
     }
     setError(null)
     setStepIndex((current) => Math.min(current + 1, FLOW_STEPS.length - 1))
+  }
+
+  async function suggestFromSpotify() {
+    setSpotifyError(null)
+    setSpotifyBusy(true)
+    try {
+      const result = await importSpotify(getToken)
+      setDraft((current) => ({
+        ...current,
+        preferences: {
+          knows: mergeCommaList(current.preferences.knows, result.suggestions.knows),
+          wants: mergeCommaList(current.preferences.wants, result.suggestions.wants_to_learn),
+        },
+      }))
+      setSpotifySummary(`Spotify suggested: ${result.genres.join(", ")}`)
+    } catch (err) {
+      setSpotifyError(err instanceof Error ? err.message : "Spotify import failed")
+    } finally {
+      setSpotifyBusy(false)
+    }
   }
 
   async function finish(event: FormEvent) {
@@ -326,20 +369,72 @@ export function OnboardingForm({
         ))}
       </div>
       <h2>{step.title}</h2>
-      {stepIndex === 0 ? (
-        <p className="note">
-          Welcome. A few answers is enough to find your people.
-        </p>
-      ) : null}
-      {topic ? <p className="note">Separate items with commas.</p> : null}
       {step.id === "reach" ? (
         <p className="note">
-          Optional. Usernames only. Connected people can see this, and you can change it later from
-          Contact ways in the account menu.
+          You choose what to share: Instagram, Discord, Snapchat, or Facebook. Nothing here is scraped.
+          Spotify comes on the next screen.
         </p>
       ) : null}
+      {step.id === "preferences" ? (
+        <p className="note">
+          Hobbies, places, interests, and festivals go in one list. Separate items with commas. Where
+          you live is on the next screen.
+        </p>
+      ) : null}
+      {step.id === "about" ? (
+        <p className="note">Orbit does not pull your name or location from connected accounts.</p>
+      ) : null}
 
-      {step.id === "you" ? (
+      {step.id === "reach" ? <ReachFields draft={contact} onChange={setContact} /> : null}
+
+      {step.id === "preferences" ? (
+        <>
+          <label htmlFor="languages-knows">
+            {languageField.knows}
+            <input
+              id="languages-knows"
+              value={draft.languages.knows}
+              onChange={(event) => updateLanguages("knows", event.target.value)}
+            />
+          </label>
+          <label htmlFor="languages-wants">
+            {languageField.wants}
+            <input
+              id="languages-wants"
+              value={draft.languages.wants}
+              onChange={(event) => updateLanguages("wants", event.target.value)}
+            />
+          </label>
+          <label htmlFor="preferences-knows">
+            {PREFERENCE_GROUP_LABELS.knows}
+            <input
+              id="preferences-knows"
+              value={draft.preferences.knows}
+              onChange={(event) => updatePreferences("knows", event.target.value)}
+            />
+          </label>
+          <label htmlFor="preferences-wants">
+            {PREFERENCE_GROUP_LABELS.wants}
+            <input
+              id="preferences-wants"
+              value={draft.preferences.wants}
+              onChange={(event) => updatePreferences("wants", event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className="ghost"
+            disabled={spotifyBusy}
+            onClick={() => void suggestFromSpotify()}
+          >
+            {spotifyBusy ? "Suggesting…" : "Suggest from Spotify"}
+          </button>
+          {spotifySummary ? <p className="note">{spotifySummary}</p> : null}
+          {spotifyError ? <p className="error">{spotifyError}</p> : null}
+        </>
+      ) : null}
+
+      {step.id === "about" ? (
         <>
           <label htmlFor="username">
             User name
@@ -374,60 +469,31 @@ export function OnboardingForm({
               onChange={(event) => setDraft((current) => ({ ...current, age: event.target.value }))}
             />
           </label>
-        </>
-      ) : null}
-
-      {step.id === "where" ? (
-        <label htmlFor="location">
-          Location
-          <input
-            id="location"
-            name="location"
-            value={draft.location}
-            autoComplete="address-level2"
-            onChange={(event) => setDraft((current) => ({ ...current, location: event.target.value }))}
-          />
-        </label>
-      ) : null}
-
-      {step.id === "gathering" ? (
-        <fieldset className="choices">
-          <legend>Group size you want</legend>
-          {GATHERING_SIZES.map((size) => (
-            <label key={size.value} className="choice">
-              <input
-                type="radio"
-                name="gathering-size"
-                value={size.value}
-                checked={draft.gatheringSize === size.value}
-                onChange={() => setDraft((current) => ({ ...current, gatheringSize: size.value }))}
-              />
-              {size.label}
-            </label>
-          ))}
-        </fieldset>
-      ) : null}
-
-      {step.id === "reach" ? <ReachFields draft={contact} onChange={setContact} /> : null}
-
-      {topic ? (
-        <>
-          <label htmlFor={`${topic.key}-knows`}>
-            {topic.knows}
+          <label htmlFor="location">
+            Location
             <input
-              id={`${topic.key}-knows`}
-              value={draft.topics[topic.key].knows}
-              onChange={(event) => updateTopic(topic.key, "knows", event.target.value)}
+              id="location"
+              name="location"
+              value={draft.location}
+              autoComplete="address-level2"
+              onChange={(event) => setDraft((current) => ({ ...current, location: event.target.value }))}
             />
           </label>
-          <label htmlFor={`${topic.key}-wants`}>
-            {topic.wants}
-            <input
-              id={`${topic.key}-wants`}
-              value={draft.topics[topic.key].wants}
-              onChange={(event) => updateTopic(topic.key, "wants", event.target.value)}
-            />
-          </label>
+          <fieldset className="choices">
+            <legend>Group size you want</legend>
+            {GATHERING_SIZES.map((size) => (
+              <label key={size.value} className="choice">
+                <input
+                  type="radio"
+                  name="gathering-size"
+                  value={size.value}
+                  checked={draft.gatheringSize === size.value}
+                  onChange={() => setDraft((current) => ({ ...current, gatheringSize: size.value }))}
+                />
+                {size.label}
+              </label>
+            ))}
+          </fieldset>
         </>
       ) : null}
 

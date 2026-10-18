@@ -1,8 +1,21 @@
 import { fireEvent, render, screen } from "@testing-library/react"
 import { beforeEach, expect, it, vi } from "vitest"
 import { OnboardingForm } from "./OnboardingForm"
-import { getContact, getOnboarding, listMatches, saveContact } from "./api"
+import { getContact, getOnboarding, listMatches, saveContact, saveOnboarding, type Contact } from "./api"
 import type { OnboardingProfile } from "./onboarding"
+
+function contact(partial: Partial<Contact> & { facebook?: string } = {}): Contact {
+  return {
+    instagram: "",
+    discord: "",
+    snapchat: "",
+    facebook: "",
+    preferred: "",
+    reach_note: "",
+    updated_at: null,
+    ...partial,
+  } as Contact
+}
 
 vi.mock("./api", () => ({
   sessionToken: async (getToken: () => Promise<string | null>) => {
@@ -20,6 +33,7 @@ vi.mock("./api", () => ({
     instagram: "",
     discord: "",
     snapchat: "",
+    facebook: "",
     preferred: "",
     reach_note: "",
     updated_at: null,
@@ -51,17 +65,12 @@ const saved: OnboardingProfile = {
 }
 
 beforeEach(() => {
+  vi.unstubAllGlobals()
   vi.mocked(getOnboarding).mockReset()
   vi.mocked(getContact).mockReset()
   vi.mocked(saveContact).mockReset()
-  vi.mocked(getContact).mockResolvedValue({
-    instagram: "",
-    discord: "",
-    snapchat: "",
-    preferred: "",
-    reach_note: "",
-    updated_at: null,
-  })
+  vi.mocked(saveOnboarding).mockReset()
+  vi.mocked(getContact).mockResolvedValue(contact())
   vi.mocked(listMatches).mockReset()
   vi.mocked(listMatches).mockResolvedValue({ matches: [] })
 })
@@ -91,31 +100,38 @@ it("opens the saved profile and lists people from the match API", async () => {
   expect(screen.getByRole("button", { name: "Ask to connect" })).toBeInTheDocument()
 })
 
-it("asks how to be reached as the last onboarding step and again from the profile", async () => {
+it("asks how to be reached first and again from the profile", async () => {
   vi.mocked(getOnboarding).mockResolvedValue(saved)
-  vi.mocked(getContact).mockResolvedValue({
-    instagram: "priya.learns",
-    discord: "",
-    snapchat: "",
-    preferred: "instagram",
-    reach_note: "Evenings",
-    updated_at: null,
-  })
+  vi.mocked(getContact).mockResolvedValue(
+    contact({
+      instagram: "priya.learns",
+      preferred: "instagram",
+      reach_note: "Evenings",
+    }),
+  )
   render(<OnboardingForm getToken={async () => "session-token"} profileOpen />)
 
   expect(await screen.findByRole("dialog", { name: "Contact ways" })).toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "Edit profile" }))
-  expect(screen.getByRole("heading", { name: "Who you are" })).toBeInTheDocument()
-  expect(screen.getByText("Step 1 of 9")).toBeInTheDocument()
-
-  for (let step = 0; step < 8; step += 1) {
-    fireEvent.click(screen.getByRole("button", { name: "Next" }))
-  }
-
   expect(screen.getByRole("heading", { name: "How you want to be reached" })).toBeInTheDocument()
+  expect(screen.getByText("Step 1 of 3")).toBeInTheDocument()
+  expect(screen.getByText(/Nothing here is scraped/)).toBeInTheDocument()
+
   const instagram = screen.getByRole("textbox", { name: "Instagram" })
   expect(instagram).toHaveValue("priya.learns")
   fireEvent.change(instagram, { target: { value: "priya.new" } })
+  fireEvent.click(screen.getByRole("button", { name: "Next" }))
+
+  expect(screen.getByRole("heading", { name: "Your preferences" })).toBeInTheDocument()
+  expect(screen.getByLabelText("Languages you speak")).toHaveValue("English")
+  expect(screen.getByLabelText("Preferences you already have")).toHaveValue("Cooking, Seattle, Diwali")
+  expect(screen.getByLabelText("Preferences you want")).toHaveValue("Dance")
+  expect(screen.queryByLabelText("Location")).not.toBeInTheDocument()
+  expect(screen.queryByLabelText("Hobbies you do")).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Next" }))
+
+  expect(screen.getByRole("heading", { name: "About you" })).toBeInTheDocument()
+  expect(screen.getByLabelText("Location")).toHaveValue("Seattle")
   fireEvent.click(screen.getByRole("button", { name: "Find your people" }))
 
   expect(await screen.findByRole("heading", { name: "Priya, people near you" })).toBeInTheDocument()
@@ -124,9 +140,21 @@ it("asks how to be reached as the last onboarding step and again from the profil
     instagram: "priya.new",
     discord: "",
     snapchat: "",
+    facebook: "",
     preferred: "instagram",
     reach_note: "Evenings",
   })
+  expect(saveOnboarding).toHaveBeenCalledWith(
+    "session-token",
+    expect.objectContaining({
+      location: "Seattle",
+      languages: { knows: ["English"], wants_to_learn: [] },
+      interests: { knows: ["Cooking", "Seattle", "Diwali"], wants_to_learn: ["Dance"] },
+      hobbies: { knows: [], wants_to_learn: [] },
+      locations: { knows: [], wants_to_learn: [] },
+      festivals: { knows: [], wants_to_learn: [] },
+    }),
+  )
 })
 
 it("leaves the match list empty when the API has no other profiles", async () => {
@@ -144,9 +172,81 @@ it("starts a blank form when this account has no profile", async () => {
   vi.mocked(getOnboarding).mockResolvedValue(null)
   render(<OnboardingForm getToken={async () => "session-token"} />)
 
-  expect(await screen.findByRole("heading", { name: "Who you are" })).toBeInTheDocument()
-  expect(screen.getByText("Step 1 of 9")).toBeInTheDocument()
+  expect(await screen.findByRole("heading", { name: "How you want to be reached" })).toBeInTheDocument()
+  expect(screen.getByText("Step 1 of 3")).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Next" }))
+  fireEvent.click(screen.getByRole("button", { name: "Next" }))
+  expect(screen.getByRole("heading", { name: "About you" })).toBeInTheDocument()
+  expect(screen.getByText(/does not pull your name or location/)).toBeInTheDocument()
   expect(screen.getByLabelText("User name")).toHaveValue("")
   expect(screen.getByLabelText("First name")).toHaveValue("")
   expect(screen.getByLabelText("Age")).toHaveValue(null)
+  expect(screen.getByLabelText("Location")).toHaveValue("")
+})
+
+it("merges Spotify suggestions into grouped preferences and leaves about fields alone", async () => {
+  vi.mocked(getOnboarding).mockResolvedValue(null)
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        genres: ["jazz", "indie"],
+        suggestions: { knows: ["Jazz", "cooking"], wants_to_learn: ["Tabla"] },
+        location: "Seattle",
+        username: "hacked",
+        first_name: "Nope",
+        age: 40,
+      }),
+    })),
+  )
+  render(<OnboardingForm getToken={async () => "session-token"} />)
+
+  expect(await screen.findByRole("heading", { name: "How you want to be reached" })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Next" }))
+  fireEvent.change(screen.getByLabelText("Preferences you already have"), {
+    target: { value: "Cooking, Diwali" },
+  })
+  fireEvent.click(screen.getByRole("button", { name: "Suggest from Spotify" }))
+
+  expect(await screen.findByText("Spotify suggested: jazz, indie")).toBeInTheDocument()
+  expect(screen.getByLabelText("Preferences you already have")).toHaveValue("Cooking, Diwali, Jazz")
+  expect(screen.getByLabelText("Preferences you want")).toHaveValue("Tabla")
+  expect(fetch).toHaveBeenCalledWith(
+    "http://localhost:5000/api/spotify/import",
+    expect.objectContaining({
+      method: "POST",
+      headers: expect.objectContaining({ Authorization: "Bearer session-token" }),
+    }),
+  )
+
+  fireEvent.click(screen.getByRole("button", { name: "Next" }))
+  expect(screen.getByLabelText("User name")).toHaveValue("")
+  expect(screen.getByLabelText("First name")).toHaveValue("")
+  expect(screen.getByLabelText("Location")).toHaveValue("")
+  expect(screen.getByLabelText("Age")).toHaveValue(null)
+})
+
+it("keeps typed preferences when Spotify import fails", async () => {
+  vi.mocked(getOnboarding).mockResolvedValue(null)
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      ok: false,
+      status: 401,
+      json: async () => ({ error: "Connect Spotify first" }),
+    })),
+  )
+  render(<OnboardingForm getToken={async () => "session-token"} />)
+
+  expect(await screen.findByRole("heading", { name: "How you want to be reached" })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Next" }))
+  fireEvent.change(screen.getByLabelText("Preferences you already have"), {
+    target: { value: "Cooking" },
+  })
+  fireEvent.click(screen.getByRole("button", { name: "Suggest from Spotify" }))
+
+  expect(await screen.findByText("Connect Spotify first")).toBeInTheDocument()
+  expect(screen.getByLabelText("Preferences you already have")).toHaveValue("Cooking")
+  expect(screen.getByLabelText("Preferences you already have")).toBeEnabled()
 })

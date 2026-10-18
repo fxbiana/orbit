@@ -183,6 +183,38 @@ def test_rank_matches_respects_limit():
     assert len(rank_matches(VIEWER, peers, limit=2)) == 2
 
 
+def test_preference_topics_share_one_pool_and_duplicates_count_once():
+    viewer = {
+        **VIEWER,
+        "location": "London",
+        "age": 50,
+        "gathering_size": "40+",
+        **_empty_topics(),
+        "interests": {"knows": [], "wants_to_learn": ["Cooking"]},
+        "hobbies": {"knows": [], "wants_to_learn": ["Cooking"]},
+    }
+    candidate = {
+        **VIEWER,
+        "location": "Austin",
+        "age": 70,
+        "gathering_size": "2-5",
+        **_empty_topics(),
+        "hobbies": {"knows": ["Cooking"], "wants_to_learn": []},
+        "interests": {"knows": ["cooking"], "wants_to_learn": []},
+    }
+    match = compatibility_with(viewer, candidate)
+    assert match["matched_on"] == ["Knows Cooking"]
+    assert match["score"] == 40
+
+    languages_only = {
+        **viewer,
+        "hobbies": {"knows": [], "wants_to_learn": []},
+        "interests": {"knows": [], "wants_to_learn": []},
+        "languages": {"knows": [], "wants_to_learn": ["Cooking"]},
+    }
+    assert compatibility_with(languages_only, candidate)["matched_on"] == []
+
+
 def test_parse_match_limit():
     assert parse_match_limit(None) == 10
     assert parse_match_limit("") == 10

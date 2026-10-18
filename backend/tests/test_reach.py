@@ -115,6 +115,7 @@ def test_get_contact_does_not_create_a_document(client, fake_firestore):
     response = client.get("/api/contact", headers={"X-User-Id": "user_test"})
     assert response.status_code == 200
     assert response.get_json()["instagram"] == ""
+    assert response.get_json()["facebook"] == ""
     assert response.get_json()["updated_at"] is None
     stored = (
         fake_firestore.collection("users")
@@ -161,6 +162,31 @@ def test_contact_rejects_a_link_and_a_preferred_channel_without_a_handle(client)
     extra = _contact(client, "user_test", {"user_id": "user_other", "preferred": "orbit"})
     assert extra.status_code == 400
     assert extra.get_json()["error"] == "unexpected field: user_id"
+
+
+def test_facebook_is_a_username_and_required_when_preferred(client):
+    saved = _contact(
+        client,
+        "user_test",
+        {"facebook": "@Amira.Learns", "preferred": "facebook"},
+    )
+    assert saved.status_code == 200
+    body = saved.get_json()
+    assert body["facebook"] == "Amira.Learns"
+    assert body["preferred"] == "facebook"
+    assert body["instagram"] == ""
+
+    linked = _contact(client, "user_test", {"facebook": "https://facebook.com/amira.learns"})
+    assert linked.status_code == 400
+    assert "username" in linked.get_json()["error"]
+
+    short = _contact(client, "user_test", {"facebook": "amir"})
+    assert short.status_code == 400
+    assert short.get_json()["error"] == "facebook username is not valid"
+
+    missing = _contact(client, "user_test", {"preferred": "facebook"})
+    assert missing.status_code == 400
+    assert missing.get_json()["error"] == "facebook is required when it is the preferred way to reach you"
 
 
 def test_orbit_preference_does_not_require_a_handle(client):

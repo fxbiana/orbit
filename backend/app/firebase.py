@@ -443,6 +443,37 @@ def get_contact(clerk_user_id: str) -> dict:
         abort(503, description="Firestore request failed")
 
 
+def _spotify_ref(clerk_user_id: str):
+    return (
+        firestore_client()
+        .collection("users")
+        .document(clerk_user_id)
+        .collection("profile")
+        .document("spotify")
+    )
+
+
+def save_spotify_snapshot(clerk_user_id: str, genres: list[str]) -> dict:
+    """Store normalized genres only. OAuth tokens never go in this document."""
+    payload = {
+        "genres": list(genres),
+        "imported_at": datetime.now(timezone.utc),
+        "source": "clerk_spotify",
+    }
+    try:
+        _spotify_ref(clerk_user_id).set(payload)
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Firestore spotify write failed")
+        abort(503, description="Firestore request failed")
+    return {
+        "genres": payload["genres"],
+        "imported_at": _iso(payload["imported_at"]),
+        "source": payload["source"],
+    }
+
+
 def save_contact(clerk_user_id: str, fields: dict) -> dict:
     now = datetime.now(timezone.utc)
     payload = {**fields, "updated_at": now}

@@ -225,13 +225,38 @@ export function compatibilityWith(
   const matchedOn: string[] = []
   let teachHits = 0
   let learnHits = 0
+  const preferenceTopics = ["hobbies", "locations", "interests", "festivals"] as const
 
-  for (const topic of TOPIC_KEYS) {
-    for (const item of overlap(viewer[topic].wants_to_learn, candidate[topic].knows)) {
+  function uniqueItems(items: readonly string[]): string[] {
+    const seen = new Set<string>()
+    const unique: string[] = []
+    for (const item of items) {
+      const key = item.toLocaleLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      unique.push(item)
+    }
+    return unique
+  }
+
+  function pooled(profile: OnboardingInput, topics: readonly TopicKey[]) {
+    const knows: string[] = []
+    const wants: string[] = []
+    for (const topic of topics) {
+      knows.push(...profile[topic].knows)
+      wants.push(...profile[topic].wants_to_learn)
+    }
+    return { knows: uniqueItems(knows), wants: uniqueItems(wants) }
+  }
+
+  for (const topics of [["languages"], preferenceTopics] as const) {
+    const viewerSide = pooled(viewer, topics)
+    const candidateSide = pooled(candidate, topics)
+    for (const item of overlap(viewerSide.wants, candidateSide.knows)) {
       teachHits += 1
       matchedOn.push(`Knows ${item}`)
     }
-    for (const item of overlap(viewer[topic].knows, candidate[topic].wants_to_learn)) {
+    for (const item of overlap(viewerSide.knows, candidateSide.wants)) {
       learnHits += 1
       matchedOn.push(`Wants ${item}`)
     }

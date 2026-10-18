@@ -8,14 +8,15 @@ import re
 
 from flask import abort
 
-CHANNELS = ("instagram", "discord", "snapchat")
-PREFERRED = ("", "instagram", "discord", "snapchat", "orbit")
+CHANNELS = ("instagram", "discord", "snapchat", "facebook")
+PREFERRED = ("", "instagram", "discord", "snapchat", "facebook", "orbit")
 NOTE_MAX_LENGTH = 160
 
 _HANDLE = {
     "instagram": re.compile(r"^[A-Za-z0-9._]{1,30}$"),
     "discord": re.compile(r"^[A-Za-z0-9._]{2,32}$"),
     "snapchat": re.compile(r"^[A-Za-z][A-Za-z0-9._-]{2,14}$"),
+    "facebook": re.compile(r"^[A-Za-z0-9.]{5,50}$"),
 }
 
 _FIELDS = (*CHANNELS, "preferred", "reach_note")
@@ -75,7 +76,7 @@ def parse_contact(body) -> dict:
         abort(400, description="preferred must be a string")
     preferred = _clean(preferred)
     if preferred not in PREFERRED:
-        abort(400, description="preferred must be one of: instagram, discord, snapchat, orbit")
+        abort(400, description="preferred must be one of: instagram, discord, snapchat, facebook, orbit")
 
     contact = {name: _handle(body, name) for name in CHANNELS}
     contact["preferred"] = preferred

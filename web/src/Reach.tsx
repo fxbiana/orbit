@@ -21,6 +21,7 @@ export type ContactDraft = {
   instagram: string
   discord: string
   snapchat: string
+  facebook: string
   preferred: PreferredChannel
   reach_note: string
 }
@@ -29,6 +30,7 @@ const EMPTY_DRAFT: ContactDraft = {
   instagram: "",
   discord: "",
   snapchat: "",
+  facebook: "",
   preferred: "",
   reach_note: "",
 }
@@ -37,10 +39,17 @@ const HANDLE = {
   instagram: /^[A-Za-z0-9._]{1,30}$/,
   discord: /^[A-Za-z0-9._]{2,32}$/,
   snapchat: /^[A-Za-z][A-Za-z0-9._-]{2,14}$/,
+  facebook: /^[A-Za-z0-9.]{5,50}$/,
 }
 
 function asPreferred(value: string): PreferredChannel {
-  if (value === "instagram" || value === "discord" || value === "snapchat" || value === "orbit") {
+  if (
+    value === "instagram" ||
+    value === "discord" ||
+    value === "snapchat" ||
+    value === "facebook" ||
+    value === "orbit"
+  ) {
     return value
   }
   return ""
@@ -51,6 +60,7 @@ function draftFrom(contact: Contact): ContactDraft {
     instagram: contact.instagram,
     discord: contact.discord,
     snapchat: contact.snapchat,
+    facebook: contact.facebook,
     preferred: asPreferred(contact.preferred),
     reach_note: contact.reach_note,
   }
@@ -77,6 +87,8 @@ export function contactProblem(draft: ContactDraft): string | null {
   if (discord) return discord
   const snapchat = handleProblem("Snapchat", draft.snapchat, HANDLE.snapchat)
   if (snapchat) return snapchat
+  const facebook = handleProblem("Facebook", draft.facebook, HANDLE.facebook)
+  if (facebook) return facebook
   if (draft.preferred === "instagram" && !username(draft.instagram)) {
     return "Add an Instagram username to prefer it."
   }
@@ -85,6 +97,9 @@ export function contactProblem(draft: ContactDraft): string | null {
   }
   if (draft.preferred === "snapchat" && !username(draft.snapchat)) {
     return "Add a Snapchat username to prefer it."
+  }
+  if (draft.preferred === "facebook" && !username(draft.facebook)) {
+    return "Add a Facebook username to prefer it."
   }
   if (draft.reach_note.trim().length > 160) return "Keep the note to 160 characters."
   return null
@@ -95,6 +110,7 @@ export function contactToSave(draft: ContactDraft) {
     instagram: username(draft.instagram),
     discord: username(draft.discord),
     snapchat: username(draft.snapchat),
+    facebook: username(draft.facebook),
     preferred: draft.preferred,
     reach_note: draft.reach_note.trim(),
   }
@@ -114,6 +130,7 @@ export function ReachFields({
       ["instagram", "Instagram", "amira.learns"],
       ["discord", "Discord", "amira"],
       ["snapchat", "Snapchat", "amira"],
+      ["facebook", "Facebook", "amira.learns"],
     ] as const
     return (
       <div className="reach-dense">
@@ -143,6 +160,7 @@ export function ReachFields({
             <option value="instagram">Instagram</option>
             <option value="discord">Discord</option>
             <option value="snapchat">Snapchat</option>
+            <option value="facebook">Facebook</option>
           </select>
         </label>
         <label className="span" htmlFor="reach-note">
@@ -189,6 +207,16 @@ export function ReachFields({
           autoComplete="off"
           placeholder="amira"
           onChange={(event) => onChange({ ...draft, snapchat: event.target.value })}
+        />
+      </label>
+      <label htmlFor="facebook">
+        Facebook
+        <input
+          id="facebook"
+          value={draft.facebook}
+          autoComplete="off"
+          placeholder="amira.learns"
+          onChange={(event) => onChange({ ...draft, facebook: event.target.value })}
         />
       </label>
       <p className="meta">Usernames only. A link is not saved.</p>
@@ -244,6 +272,16 @@ export function ReachFields({
           />
           Snapchat
         </label>
+        <label className="choice">
+          <input
+            type="radio"
+            name="preferred"
+            value="facebook"
+            checked={draft.preferred === "facebook"}
+            onChange={() => onChange({ ...draft, preferred: "facebook" })}
+          />
+          Facebook
+        </label>
       </fieldset>
       <label htmlFor="reach-note">
         When you usually reply
@@ -269,7 +307,10 @@ function preferLine(name: string, contact: PublicContact): string {
   if (contact.preferred === "instagram") return `${name} prefers Instagram.`
   if (contact.preferred === "discord") return `${name} prefers Discord.`
   if (contact.preferred === "snapchat") return `${name} prefers Snapchat.`
-  if (contact.instagram || contact.discord || contact.snapchat) return `${name} left a way to reach them.`
+  if (contact.preferred === "facebook") return `${name} prefers Facebook.`
+  if (contact.instagram || contact.discord || contact.snapchat || contact.facebook) {
+    return `${name} left a way to reach them.`
+  }
   return `${name} hasn't added a social link yet. Message them here.`
 }
 
@@ -278,6 +319,7 @@ function SocialLinks({ contact }: { contact: PublicContact }) {
   const instagram = HANDLE.instagram.test(contact.instagram) ? contact.instagram : ""
   const discord = HANDLE.discord.test(contact.discord) ? contact.discord : ""
   const snapchat = HANDLE.snapchat.test(contact.snapchat) ? contact.snapchat : ""
+  const facebook = HANDLE.facebook.test(contact.facebook) ? contact.facebook : ""
 
   async function copyDiscord() {
     try {
@@ -288,7 +330,7 @@ function SocialLinks({ contact }: { contact: PublicContact }) {
     }
   }
 
-  if (!instagram && !discord && !snapchat) return null
+  if (!instagram && !discord && !snapchat && !facebook) return null
 
   return (
     <p className="socials">
@@ -307,6 +349,7 @@ function SocialLinks({ contact }: { contact: PublicContact }) {
           Snapchat · {snapchat}
         </a>
       ) : null}
+      {facebook ? <span>Facebook · {facebook}</span> : null}
     </p>
   )
 }
@@ -405,6 +448,7 @@ function FriendCard({
     instagram: "",
     discord: "",
     snapchat: "",
+    facebook: "",
     preferred: "",
     reach_note: "",
   }

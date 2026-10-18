@@ -139,7 +139,7 @@ export function joinPlan(token: string, planId: string) {
   })
 }
 
-export const CONTACT_CHANNELS = ["instagram", "discord", "snapchat"] as const
+export const CONTACT_CHANNELS = ["instagram", "discord", "snapchat", "facebook"] as const
 
 export type ContactChannel = (typeof CONTACT_CHANNELS)[number]
 
@@ -149,6 +149,7 @@ export type Contact = {
   instagram: string
   discord: string
   snapchat: string
+  facebook: string
   preferred: PreferredChannel
   reach_note: string
   updated_at: string | null
@@ -191,7 +192,7 @@ export function getContact(token: string) {
 
 export function saveContact(
   token: string,
-  contact: Pick<Contact, "instagram" | "discord" | "snapchat" | "preferred" | "reach_note">,
+  contact: Pick<Contact, "instagram" | "discord" | "snapchat" | "facebook" | "preferred" | "reach_note">,
 ) {
   return request<Contact>("/api/contact", token, {
     method: "PUT",

@@ -95,15 +95,20 @@ export const PROFILE_FIELDS: {
   },
 ]
 
+export const GROUPED_TOPIC_KEYS = ["hobbies", "locations", "interests", "festivals"] as const
+
+export const PREFERENCE_GROUP_LABELS = {
+  knows: "Preferences you already have",
+  wants: "Preferences you want",
+} as const
+
 export const FLOW_STEPS: { id: FlowStepId; title: string }[] = [
-  { id: "you", title: "Who you are" },
-  { id: "where", title: "Where you land" },
-  { id: "gathering", title: "How you gather" },
-  ...PROFILE_FIELDS.map((field) => ({ id: field.key, title: field.title })),
   { id: "reach", title: "How you want to be reached" },
+  { id: "preferences", title: "Your preferences" },
+  { id: "about", title: "About you" },
 ]
 
-export type FlowStepId = "you" | "where" | "gathering" | TopicKey | "reach"
+export type FlowStepId = "reach" | "preferences" | "about"
 
 export function cleanText(value: string): string {
   return value.trim().replace(/\s+/g, " ")
@@ -127,7 +132,42 @@ export function formatList(items: string[]): string {
   return items.join(", ")
 }
 
-export function validateOnboarding(input: OnboardingInput): string | null {
+export function unionGrouped(
+  source: Pick<OnboardingInput, (typeof GROUPED_TOPIC_KEYS)[number]>,
+  side: TopicSide,
+): string[] {
+  const seen = new Set<string>()
+  const items: string[] = []
+  for (const key of GROUPED_TOPIC_KEYS) {
+    for (const raw of source[key][side]) {
+      const text = cleanText(raw)
+      if (!text) continue
+      const id = text.toLocaleLowerCase()
+      if (seen.has(id)) continue
+      seen.add(id)
+      items.push(text)
+    }
+  }
+  return items
+}
+
+function listProblem(items: string[], label: string): string | null {
+  if (items.length > ONBOARDING_LIMITS.list) {
+    return `${label} can list at most ${ONBOARDING_LIMITS.list} items.`
+  }
+  for (const item of items) {
+    if (item.length > ONBOARDING_LIMITS.item) {
+      return `${label} has an item longer than ${ONBOARDING_LIMITS.item} characters.`
+    }
+  }
+  return null
+}
+
+function topicProblem(topic: Knowledge, knowsLabel: string, wantsLabel: string): string | null {
+  return listProblem(topic.knows, knowsLabel) ?? listProblem(topic.wants_to_learn, wantsLabel)
+}
+
+function aboutProblem(input: OnboardingInput): string | null {
   const username = cleanText(input.username)
   const firstName = cleanText(input.first_name)
   if (!username) return "Enter a user name."
@@ -148,80 +188,31 @@ export function validateOnboarding(input: OnboardingInput): string | null {
   if (!GATHERING_SIZES.some((size) => size.value === input.gathering_size)) {
     return "Choose a gathering size."
   }
+  return null
+}
+
+export function validateOnboarding(input: OnboardingInput): string | null {
+  const about = aboutProblem(input)
+  if (about) return about
 
   for (const field of PROFILE_FIELDS) {
-    const topic = input[field.key]
-    const sides = [
-      ["knows", field.knows],
-      ["wants_to_learn", field.wants],
-    ] as const
-    for (const [side, label] of sides) {
-      const items = topic[side]
-      if (items.length > ONBOARDING_LIMITS.list) {
-        return `${label} can list at most ${ONBOARDING_LIMITS.list} items.`
-      }
-      for (const item of items) {
-        if (item.length > ONBOARDING_LIMITS.item) {
-          return `${label} has an item longer than ${ONBOARDING_LIMITS.item} characters.`
-        }
-      }
-    }
+    const problem = topicProblem(input[field.key], field.knows, field.wants)
+    if (problem) return problem
   }
   return null
 }
 
 export function validateFlowStep(step: FlowStepId, input: OnboardingInput): string | null {
-  if (step === "you") {
-    const username = cleanText(input.username)
-    const firstName = cleanText(input.first_name)
-    if (!username) return "Enter a user name."
-    if (username.length > ONBOARDING_LIMITS.username) return "User name can be at most 40 characters."
-    if (!firstName) return "Enter a first name."
-    if (firstName.length > ONBOARDING_LIMITS.first_name) {
-      return "First name can be at most 80 characters."
-    }
-    if (!Number.isInteger(input.age)) return "Enter your age."
-    if (input.age < ONBOARDING_LIMITS.ageMin || input.age > ONBOARDING_LIMITS.ageMax) {
-      return "Age must be from 13 to 120."
-    }
-    return null
-  }
-
-  if (step === "where") {
-    const location = cleanText(input.location)
-    if (!location) return "Enter a location."
-    if (location.length > ONBOARDING_LIMITS.location) {
-      return "Location can be at most 80 characters."
-    }
-    return null
-  }
-
-  if (step === "gathering") {
-    if (!GATHERING_SIZES.some((size) => size.value === input.gathering_size)) {
-      return "Choose a gathering size."
-    }
-    return null
-  }
-
   if (step === "reach") return null
+  if (step === "about") return aboutProblem(input)
 
-  const field = PROFILE_FIELDS.find((item) => item.key === step)
-  if (!field) return null
-  const topic = input[field.key]
-  const sides = [
-    ["knows", field.knows],
-    ["wants_to_learn", field.wants],
-  ] as const
-  for (const [side, label] of sides) {
-    const items = topic[side]
-    if (items.length > ONBOARDING_LIMITS.list) {
-      return `${label} can list at most ${ONBOARDING_LIMITS.list} items.`
-    }
-    for (const item of items) {
-      if (item.length > ONBOARDING_LIMITS.item) {
-        return `${label} has an item longer than ${ONBOARDING_LIMITS.item} characters.`
-      }
-    }
-  }
-  return null
+  const languages = PROFILE_FIELDS.find((field) => field.key === "languages")
+  if (!languages) return null
+  const languageProblem = topicProblem(input.languages, languages.knows, languages.wants)
+  if (languageProblem) return languageProblem
+  return topicProblem(
+    input.interests,
+    PREFERENCE_GROUP_LABELS.knows,
+    PREFERENCE_GROUP_LABELS.wants,
+  )
 }
